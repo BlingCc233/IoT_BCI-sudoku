@@ -1,0 +1,29 @@
+\thesisappendix
+
+\chapter{复现实验命令清单}
+\section{编译与自检}
+在仓库根目录执行：
+\begin{verbatim}
+go test ./...
+go test -race ./...
+\end{verbatim}
+
+\section{运行协议示例（回环）}
+\begin{verbatim}
+go run ./cmd/iotbci -c configs/dev_server_stream.json -timeout 30s
+go run ./cmd/iotbci -c configs/dev_client_stream.json -timeout 30s
+\end{verbatim}
+
+\section{生成 bench / evidence / dashboard}
+\begin{verbatim}
+go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json
+go run ./cmd/iotbci-evidence -out_dir evidence_out -messages 200 -size 256 -timeout 30s
+go run ./cmd/iotbci-attack -timeout 10s -out attack_report.json
+go run ./cmd/iotbci-dashboard -bench bench.json -evidence evidence_out/evidence.json -attack attack_report.json -out_dir dashboard_out
+\end{verbatim}
+
+\section{生成 LaTeX 图表与表格}
+\begin{verbatim}
+go run ./cmd/iotbci-texgen -bench bench.json -evidence evidence_out/evidence.json -out_dir tex/generated
+\end{verbatim}
+

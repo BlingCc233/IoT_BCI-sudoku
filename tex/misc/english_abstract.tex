@@ -1,0 +1,11 @@
+
+\begin{englishabstract}
+Brain-computer interface (BCI) devices typically consist of a sensing endpoint, a mobile/edge gateway, and a server-side algorithm. Their data and control commands are sensitive, continuous, and latency-critical. Once the communication path is compromised by eavesdropping, replay, or man-in-the-middle attacks, privacy leakage and unsafe control may follow. While TLS/DTLS are cryptographically mature, practical deployments on resource-constrained devices and complex networks may still suffer from implementation overhead, handshake costs, and traffic fingerprintability via observable length/timing patterns.
+
+This thesis presents the IoT\_BCI-Sudoku protocol implemented in this repository. We propose a layered enhancement approach that combines authenticated encryption with an appearance transformation layer. Without modifying the TCP kernel, the protocol is placed between the application and TCP, providing an authenticated handshake (Ed25519 + X25519), an AEAD-based session record layer, and a Sudoku-inspired appearance layer with mapping, randomized padding, and layout rotation (plus optional batching). We further include anti-replay mechanisms and fallback behaviors to mitigate active probing and malformed inputs.
+
+To support reproducibility, we implement baseline protocols (pure AEAD framing, DTLS, MQTT, and CoAP/UDP) and build an automated toolchain for benchmarking, packet capture analysis, and attack simulation. We report comparative results on memory usage, latency, bandwidth overhead, and traffic appearance metrics (length/timing distributions and entropy), and discuss the trade-offs and applicability of the proposed design.
+
+\englishkeyword{BCI, IoT, secure communication, anti-replay, traffic obfuscation, fingerprint resistance, Sudoku}
+\end{englishabstract}
+

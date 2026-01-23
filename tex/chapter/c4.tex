@@ -1,0 +1,50 @@
+\chapter{性能评估与对比分析}
+
+\section{实验方法与工具链}
+本文以“可复现对比”为原则，评测工具链与数据流如下：
+\begin{itemize}
+  \item \textbf{micro-bench}：\texttt{cmd/iotbci-bench} 在进程内驱动不同协议实现，输出 JSON 结果，用于观察编解码/加密/封装的 CPU 与分配开销趋势。
+  \item \textbf{evidence 证据集}：\texttt{cmd/iotbci-evidence} 通过真实回环 socket 跑端到端场景，并可选择抓包生成 pcap，用于外观特征与侧写分析。
+  \item \textbf{抓包报告}：\texttt{cmd/iotbci-report} 对 pcap/pcapng 进行解析，提取长度/时序/字节统计特征并给出协议指纹猜测。
+  \item \textbf{统一可视化}：\texttt{cmd/iotbci-dashboard} 将 bench/evidence/攻击模拟结果汇总到单页报告，便于横向对比。
+  \item \textbf{论文图表生成}：\texttt{cmd/iotbci-texgen} 从 JSON 生成可直接插入的 LaTeX 表格与 pgfplots 图。
+\end{itemize}
+
+\section{评测指标口径}
+本文关注的量化指标包括：
+\begin{itemize}
+  \item \textbf{带宽开销}：\texttt{overhead\_ratio = wire\_bytes\_total / payload\_bytes\_total}，越接近 1 越好；
+  \item \textbf{时延}：平均 RTT 与 P95 RTT；
+  \item \textbf{内存}：Go runtime 采样的峰值 heap in-use / heap alloc / sys；
+  \item \textbf{吞吐}：payload/wire throughput（bytes/s）；
+  \item \textbf{外观指标}：wire entropy（bits/byte）、ASCII 比例、写入大小/写入间隔的 log2 分布等。
+\end{itemize}
+
+\section{micro-bench 对比结果}
+本节给出 micro-bench 的对比表格与图（若缺失，请先运行 \texttt{cmd/iotbci-texgen} 生成）。
+
+\IfFileExists{generated/bench_table.tex}{\input{generated/bench_table}}{\textit{(缺少 generated/bench\_table.tex，请先运行 cmd/iotbci-texgen 生成)}}
+
+\IfFileExists{generated/bench_figures.tex}{\input{generated/bench_figures}}{\textit{(缺少 generated/bench\_figures.tex，请先运行 cmd/iotbci-texgen 生成)}}
+
+\section{evidence 证据集对比结果}
+evidence 以真实 socket 端到端收发为主，适用于观察更贴近网络栈行为的外观特征与时延/吞吐波动。
+
+\IfFileExists{generated/evidence_table.tex}{\input{generated/evidence_table}}{\textit{(缺少 generated/evidence\_table.tex，请先运行 cmd/iotbci-texgen 生成)}}
+
+\IfFileExists{generated/evidence_figures.tex}{\input{generated/evidence_figures}}{\textit{(缺少 generated/evidence\_figures.tex，请先运行 cmd/iotbci-texgen 生成)}}
+
+\section{结果讨论：安全—效率—外观之间的权衡}
+从对比结果可以观察到：纯 AEAD 与轻量级 UDP/CoAP 方案在带宽开销上更接近理想值，但在身份认证、抗重放/抗 MITM 的工程语义以及外观对抗能力方面存在不足；IoT\_BCI-Sudoku 通过在加密之上叠加可控的外观层，提升了抗侧写能力，但付出了额外字节比例与部分处理开销。
+
+在 Sudoku 协议内部，packed 优化用于降低写调用次数与小包边界开销，通常能够改善 wire bytes 与执行耗时；但其最终收益仍与 payload 大小、网络栈缓冲与调度噪声有关，需要结合具体业务负载进行参数化调优。
+
+\section{流量外观特征分析要点}
+外观层的核心目标是使“包分布不再固定”。在抓包报告与 dashboard 中，可重点观察：
+\begin{itemize}
+  \item 写入大小分布是否呈现更宽的分布范围（padding 的直接体现）；
+  \item 写入间隔分布是否更不规则（与聚合/分片及调度相关）；
+  \item 字节熵值与 ASCII 比例是否符合外观层设计预期；
+  \item 协议指纹识别器对 Sudoku 的置信度与混淆效果。
+\end{itemize}
+
