@@ -387,6 +387,16 @@ go test -tags stress ./...
 
 注意：压力测试不会默认在 `ci.yml` 里跑，而是放在 `stress.yml`（手动触发）避免拖慢 PR。
 
+### 9.4 覆盖率（review 时常用）
+
+```bash
+go test ./... -coverprofile cover.out
+go tool cover -func=cover.out | sort -k3 -n
+go tool cover -html=cover.out -o cover.html
+```
+
+其中 `cover.html` 适合用来定位“某段逻辑到底有没有被测到”。
+
 ---
 
 ## 10. 如何读取“对比结果”和“测试结果”
@@ -461,4 +471,3 @@ go test -tags stress ./...
 - `doc/SPEC.md`（封装与错误处理规范）
 - `doc/SECURITY.md`（参数建议与威胁模型）
 - `doc/OBFS_SUDOKU.md`（外观层可解析性/鲁棒性）
-
