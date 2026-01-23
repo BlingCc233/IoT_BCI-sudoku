@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestDatagramRoundTrip(t *testing.T) {
@@ -73,5 +74,33 @@ func TestPacketConn_ShortBuffer(t *testing.T) {
 	_, _, err := s.ReadFrom(buf)
 	if err != io.ErrShortBuffer {
 		t.Fatalf("expected ErrShortBuffer, got %v", err)
+	}
+}
+
+func TestPrefaceAndAddr(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WritePreface(&buf); err != nil {
+		t.Fatalf("WritePreface: %v", err)
+	}
+	if err := ReadPreface(bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf("ReadPreface: %v", err)
+	}
+	if Addr("x").Network() != "uot" {
+		t.Fatalf("unexpected network")
+	}
+}
+
+func TestPacketConn_MiscMethods(t *testing.T) {
+	sRaw, cRaw := net.Pipe()
+	defer sRaw.Close()
+	defer cRaw.Close()
+
+	pc := NewPacketConn(sRaw)
+	_ = pc.LocalAddr()
+	_ = pc.SetDeadline(time.Now().Add(10 * time.Millisecond))
+	_ = pc.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+	_ = pc.SetWriteDeadline(time.Now().Add(10 * time.Millisecond))
+	if err := pc.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
 	}
 }

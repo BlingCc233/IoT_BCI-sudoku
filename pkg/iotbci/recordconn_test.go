@@ -108,6 +108,21 @@ func TestRecordConn_ConcurrentReadWrite(t *testing.T) {
 	if err := <-cWriteErr; err != nil {
 		t.Fatal(err)
 	}
+
+	if crw, ok := sConn.(interface {
+		CloseRead() error
+		CloseWrite() error
+	}); ok {
+		_ = crw.CloseWrite()
+		_ = crw.CloseRead()
+	}
+	if crw, ok := cConn.(interface {
+		CloseRead() error
+		CloseWrite() error
+	}); ok {
+		_ = crw.CloseWrite()
+		_ = crw.CloseRead()
+	}
 }
 
 func writeChunks(ctx context.Context, w io.Writer, b []byte, chunkSize int) error {
