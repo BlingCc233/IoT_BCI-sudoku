@@ -1,0 +1,73 @@
+name: stress
+
+on:
+  workflow_dispatch:
+    inputs:
+      handshakes:
+        description: "Handshake pairs to run in pkg/iotbci stress tests"
+        required: false
+        default: "200"
+      concurrency:
+        description: "Max concurrent handshakes (empty = auto)"
+        required: false
+        default: ""
+      streams:
+        description: "Mux streams to open in stress test"
+        required: false
+        default: "256"
+      stream_payload:
+        description: "Bytes per mux stream payload"
+        required: false
+        default: "16384"
+      gomemlimit:
+        description: "Go memory limit (GOMEMLIMIT), e.g. 256MiB"
+        required: false
+        default: "256MiB"
+      stress_race:
+        description: "Also run -race with -tags stress (slow)"
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    env:
+      GOMEMLIMIT: ${{ inputs.gomemlimit }}
+      IOTBCI_STRESS_HANDSHAKES: ${{ inputs.handshakes }}
+      IOTBCI_STRESS_CONCURRENCY: ${{ inputs.concurrency }}
+      IOTBCI_STRESS_STREAMS: ${{ inputs.streams }}
+      IOTBCI_STRESS_STREAM_PAYLOAD: ${{ inputs.stream_payload }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: stress
+        run: go test -tags stress ./...
+
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: race
+        run: go test -race ./...
+
+  stress-race:
+    if: ${{ inputs.stress_race }}
+    runs-on: ubuntu-latest
+    env:
+      IOTBCI_STRESS_HANDSHAKES: "50"
+      IOTBCI_STRESS_STREAMS: "64"
+      IOTBCI_STRESS_STREAM_PAYLOAD: "4096"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+      - name: stress-race
+        run: go test -race -tags stress ./...
+
