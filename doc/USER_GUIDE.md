@@ -12,6 +12,24 @@
 
 ## 0. 快速开始（5 分钟跑通）
 
+### 0.0 一键复现（推荐）
+
+如果你只想“跑起来看结果”，直接运行：
+
+```bash
+./scripts/repro.sh
+```
+
+输出会写到 `tmp/repro_out/`（默认已在 `.gitignore` 中忽略），然后用浏览器打开：
+
+- `tmp/repro_out/dashboard_out/index.html`
+
+你也可以用参数控制规模：
+
+```bash
+./scripts/repro.sh -messages 1000 -size 256 -timeout 60s -out_dir tmp/repro_out_big
+```
+
 ### 0.1 环境要求
 
 - Go：`1.23.x`（见 `go.mod` / CI）
