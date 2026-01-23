@@ -1,0 +1,17 @@
+.DS_Store
+.upstream/
+dist/
+bin/
+*.pcap
+*.pcapng
+*.log
+report_out/
+bench.json
+evidence_out/
+evidence_tmp_run*/
+
+# Go
+*.test
+*.out
+/coverage/
+/tmp/
