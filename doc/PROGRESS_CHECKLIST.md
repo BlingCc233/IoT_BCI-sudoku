@@ -23,7 +23,7 @@ Use this checklist to verify the “deliverables” described in the proposal PD
 - [x] Baselines: pure-AEAD / CoAP-over-UDP / MQTT / DTLS: `internal/bench/run_*.go`
 - [x] End-to-end bench runner (JSON output): `cmd/iotbci-bench`
 - [x] Wire “appearance” metrics (size/time bins, throughput, write syscalls): `internal/bench/wire*.go`
-- [ ] Entropy metrics (byte distribution / length entropy) integrated into reports
+- [x] Entropy metrics (byte distribution / length entropy) integrated into reports
 - [ ] Extreme-network evaluation (high jitter/loss/peak-hour style) as reproducible script/config
 
 ## Capture analysis & attack simulation
@@ -36,6 +36,5 @@ Use this checklist to verify the “deliverables” described in the proposal PD
 
 - [x] Deployment notes: `doc/DEPLOYMENT.md`
 - [x] Git remotes / “Gitea full vs GitHub template-only”: `doc/GIT_REMOTES.md`, `scripts/sync_github_branch.sh`
-- [ ] CI script/workflow to run `go test ./...` and `go test -race ./...`
-- [ ] Remove local artifacts from the repo (bench JSON / dashboards / evidence outputs)
-
+- [x] CI script/workflow to run `go test ./...` and `go test -race ./...`: `.github/workflows/{ci,stress}.yml`
+- [x] Remove local artifacts from the repo (bench JSON / dashboards / evidence outputs): `.gitignore`
