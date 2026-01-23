@@ -41,3 +41,6 @@ dashboard_evidence/
 
 # TeX compiled PDFs in template root (keep figures under tex/pic/)
 tex/*.pdf
+
+# TikZ source folder: ignore compiled outputs
+tex/pic_src/*.pdf
