@@ -56,10 +56,17 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 	sum := sha256.Sum256([]byte(now.String()))
 	psk := "bench-psk:" + hex8(sum[:])
 
+	asciiMode := "prefer_entropy"
+	customTables := []string{"xppppxvv", "vppxppvx"}
+	if enablePureDownlink {
+		asciiMode = "prefer_ascii"
+		customTables = nil
+	}
+
 	serverOpts := &iotbci.ServerOptions{
 		Obfs: iotbci.ObfsOptions{
-			ASCII:              "prefer_entropy",
-			CustomTables:       []string{"xppppxvv", "vppxppvx"},
+			ASCII:              asciiMode,
+			CustomTables:       customTables,
 			PaddingMin:         paddingMin,
 			PaddingMax:         paddingMax,
 			EnablePureDownlink: enablePureDownlink,
@@ -83,8 +90,8 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 
 	clientOpts := &iotbci.ClientOptions{
 		Obfs: iotbci.ObfsOptions{
-			ASCII:              "prefer_entropy",
-			CustomTables:       []string{"xppppxvv", "vppxppvx"},
+			ASCII:              asciiMode,
+			CustomTables:       customTables,
 			PaddingMin:         paddingMin,
 			PaddingMax:         paddingMax,
 			EnablePureDownlink: enablePureDownlink,
