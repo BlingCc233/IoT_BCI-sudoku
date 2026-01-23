@@ -12,16 +12,18 @@ Git 的 `.gitignore` **无法按 remote 区分**（同一个分支上被 commit 
 
 ## 1) 目录约定（建议）
 
-将敏感论文内容集中放在固定目录，便于在 `github` 分支一键剔除，例如：
+在 `main` 分支中，论文正文与相关素材通常包含姓名/学号/实验结果等内容，建议集中放在固定目录或固定文件，便于在 `github` 分支一键剔除。
 
-- `tex/thesis/`：论文正文（敏感）
-- `tex/generated/`：论文用的生成图表/表格（若含敏感数据也可归类为敏感）
+本仓库当前约定（可按需调整）：
+
+- `tex/main.tex` + `tex/chapter/` + `tex/misc/`：论文正文（敏感）
+- `tex/generated/`：论文用的生成图表/表格（若含敏感数据也可视为敏感）
 - 其它你认为敏感的：例如开题报告、进度表、原始实验数据等
 
 模板与可公开内容（可留在 GitHub）：
 
 - `tex/thesis-uestc.cls` / `tex/thesis-uestc.bst` / `tex/README.md` 等模板文件
-- `tex/main.tex` / `tex/main_multifile.tex`（如果只是“示例/模板”，不写真实内容）
+- `tex/template_original_main.tex` / `tex/main_multifile.tex`（示例/模板，不含真实个人信息）
 
 ## 2) 分支推送方式
 
@@ -46,9 +48,8 @@ git push origin github
 1. 确保工作区干净（`git status`）
 2. `git checkout github`（不存在则创建）
 3. `git reset --hard main`
-4. `rm -rf tex/thesis tex/generated ...`
+4. `rm -rf tex/main.tex tex/chapter tex/misc tex/generated ...`
 5. `git commit -am "sync github branch (remove private thesis)"`
 6. `git push origin github`
 
 注意：脚本会执行 `git commit`，建议在你确认后手动运行。
-

@@ -18,7 +18,9 @@ SOURCE_BRANCH="${1:-main}"
 TARGET_BRANCH="${2:-github}"
 
 SENSITIVE_PATHS=(
-  "tex/thesis"
+  "tex/main.tex"
+  "tex/chapter"
+  "tex/misc"
   "tex/generated"
   "tex/pic/generated"
   "attack_report.json"
@@ -44,8 +46,7 @@ git reset --hard "${SOURCE_BRANCH}"
 for p in "${SENSITIVE_PATHS[@]}"; do
   # Use git rm so the target branch doesn't keep the paths.
   # Intentionally unquoted to allow simple globs like bench*.json.
-  git rm -r --cached --ignore-unmatch ${p} >/dev/null 2>&1 || true
-  rm -rf ${p} >/dev/null 2>&1 || true
+  git rm -r --ignore-unmatch -f ${p} >/dev/null 2>&1 || true
 done
 
 git add -A
