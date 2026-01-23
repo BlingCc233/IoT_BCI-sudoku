@@ -1,0 +1,30 @@
+{
+  "mode": "server",
+  "listen": "127.0.0.1:9002",
+  "app": "uot",
+  "suspicious_action": "fallback",
+  "fallback_addr": "127.0.0.1:8080",
+  "obfs": {
+    "ascii": "prefer_entropy",
+    "custom_tables": ["xppppxvv", "vppxppvx"],
+    "padding_min": 2,
+    "padding_max": 7,
+    "enable_pure_downlink": false
+  },
+  "security": {
+    "psk": "dev-psk-123",
+    "handshake_aead": "chacha20-poly1305",
+    "session_aead": "chacha20-poly1305",
+    "handshake_timeout_sec": 5,
+    "time_skew_sec": 60,
+    "replay_window_sec": 120,
+    "replay_cache_size": 4096,
+    "max_handshake_size": 16384
+  },
+  "identity": {
+    "master_public_key_hex": "ad83802dec422591bc01a0d0cf490633ac9c8342f928692fc79d658d219d1109",
+    "local_private_key_hex": "0e4b92b8b777659a069d66662fec8dacebb4a95066a303ce428f90ab365f7f7385bcb217b18fad32d122467bd2b8c3b52aa75dbfa28293ec09d1bf5b496f18d6",
+    "local_cert": "AQAAAAAAAAABAAAAAGlzlQEAAAAAfD+ZLQAIc2VydmVyLTGFvLIXsY+tMtEiRnvSuMO1Kqddv6KCk+wJ0b9bSW8Y1tAjqLGvoKT04dmNQjcole9JEu8dMqUugLx8IOZ/tZq9CRQ6w+qbpxGXOusWUO8HKABEIvoyMiv/FiDTTPAeUAA="
+  }
+}
+
