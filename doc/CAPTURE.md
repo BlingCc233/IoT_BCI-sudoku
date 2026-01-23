@@ -44,6 +44,10 @@ go run ./cmd/iotbci-report \
 - `report_out/report.md`
 - `report_out/report.html`
 
+补充：
+- 如果不指定 `-tcp_ports/-udp_ports`，将默认分析 pcap 内所有 TCP/UDP payload（适合“已用 BPF 过滤过”的抓包）。
+- 报告中包含 `protocol_guess` 字段（基于 payload 特征的粗略识别：DTLS / CoAP / MQTT / pure-AEAD / IoTBCI-Sudoku）。
+
 目前统计基于 TCP/UDP 的 payload 字节（不含 L2/L3/L4 头），更贴近“外观层/加密层”实际暴露的可侧写信息。
 
 ## 3) 一键证据集（推荐）

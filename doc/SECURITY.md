@@ -4,6 +4,7 @@
 
 - Replay: attacker records packets and replays them to trigger repeated control commands.
 - MITM: attacker impersonates one side, attempts to tamper or analyze traffic appearance.
+- Resource exhaustion: attacker floods invalid probes/frames to consume CPU/memory/state.
 
 ## Expected behavior
 
@@ -45,3 +46,17 @@
 - `ReplayCacheSize`/`ReplayWindow` 限制重放缓存；
 - mux 侧 `MaxQueuedBytesPerStream`/`MaxQueuedBytesTotal` 限制队列增长；
 - 任何协议违规进入可疑路径，不进入真实数据处理逻辑。
+
+## 可复现实验（工具模拟）
+
+本仓库提供了一个最小化的攻击模拟工具，用于在本机进程内复现“应当被拒绝/被标记可疑”的行为：
+
+```bash
+go run ./cmd/iotbci-attack -timeout 10s -out attack_report.json
+```
+
+输出包含：
+
+- `replay`：复用上一轮抓到的 client->server 握手字节，期望触发 `ErrReplayDetected`
+- `mitm-tamper`：对链路中首个写入进行 bit-flip，期望握手在可疑路径失败（`SuspiciousError` / `AuthFailed` / `ProtocolViolation`）
+- `resource-probe-flood`：发送大量无效探测数据，期望 server 快速拒绝且不进入真实数据逻辑

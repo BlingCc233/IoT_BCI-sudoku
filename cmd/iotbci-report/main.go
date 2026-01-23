@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -26,11 +27,18 @@ type report struct {
 	TCPPorts []uint16 `json:"tcp_ports"`
 	UDPPorts []uint16 `json:"udp_ports"`
 
+	ObservedTCPPorts []uint16 `json:"observed_tcp_ports,omitempty"`
+	ObservedUDPPorts []uint16 `json:"observed_udp_ports,omitempty"`
+
 	Packets int   `json:"packets"`
 	Bytes   int64 `json:"bytes"`
 
 	Entropy    float64 `json:"entropy"`
 	ASCIIRatio float64 `json:"ascii_ratio"`
+
+	ProtocolGuess   string   `json:"protocol_guess,omitempty"`
+	GuessConfidence float64  `json:"guess_confidence,omitempty"`
+	GuessNotes      []string `json:"guess_notes,omitempty"`
 
 	SizeBinsLog2       map[int]int `json:"size_bins_log2"`
 	InterArrivalMsBins map[int]int `json:"interarrival_ms_bins_log2"`
@@ -58,9 +66,6 @@ func main() {
 	udpList, err := parsePorts(*udpPorts)
 	if err != nil {
 		fatal(err)
-	}
-	if len(tcpList) == 0 && len(udpList) == 0 {
-		fatal(fmt.Errorf("at least one of -tcp_ports or -udp_ports is required"))
 	}
 
 	rep, err := analyze(*inPath, tcpList, udpList)
@@ -123,6 +128,11 @@ func analyze(path string, tcpPorts, udpPorts []uint16) (*report, error) {
 	for _, p := range udpPorts {
 		udpSet[p] = struct{}{}
 	}
+	filterTCP := len(tcpSet) != 0
+	filterUDP := len(udpSet) != 0
+
+	observedTCP := make(map[uint16]struct{})
+	observedUDP := make(map[uint16]struct{})
 
 	var (
 		rep = &report{
@@ -136,6 +146,13 @@ func analyze(path string, tcpPorts, udpPorts []uint16) (*report, error) {
 		freq    [256]uint64
 		lastTS  time.Time
 		hasLast bool
+
+		tcpPayloads int
+		udpPayloads int
+		dtlsLike    int
+		coapLike    int
+		mqttSeen    bool
+		mqttWindow  []byte
 	)
 
 	for {
@@ -155,9 +172,23 @@ func analyze(path string, tcpPorts, udpPorts []uint16) (*report, error) {
 			tcp := pkt.Layer(layers.LayerTypeTCP).(*layers.TCP)
 			sp := uint16(tcp.SrcPort)
 			dp := uint16(tcp.DstPort)
-			if _, ok := tcpSet[sp]; !ok {
-				if _, ok := tcpSet[dp]; !ok {
-					continue
+			if filterTCP {
+				if _, ok := tcpSet[sp]; !ok {
+					if _, ok := tcpSet[dp]; !ok {
+						continue
+					}
+				}
+			}
+			if len(tcp.Payload) > 0 {
+				observedTCP[sp] = struct{}{}
+				observedTCP[dp] = struct{}{}
+				tcpPayloads++
+				mqttWindow = append(mqttWindow, tcp.Payload...)
+				if len(mqttWindow) > 256 {
+					mqttWindow = mqttWindow[len(mqttWindow)-256:]
+				}
+				if bytes.Contains(mqttWindow, []byte("MQTT")) {
+					mqttSeen = true
 				}
 			}
 			payload = tcp.Payload
@@ -165,9 +196,22 @@ func analyze(path string, tcpPorts, udpPorts []uint16) (*report, error) {
 			udp := pkt.Layer(layers.LayerTypeUDP).(*layers.UDP)
 			sp := uint16(udp.SrcPort)
 			dp := uint16(udp.DstPort)
-			if _, ok := udpSet[sp]; !ok {
-				if _, ok := udpSet[dp]; !ok {
-					continue
+			if filterUDP {
+				if _, ok := udpSet[sp]; !ok {
+					if _, ok := udpSet[dp]; !ok {
+						continue
+					}
+				}
+			}
+			if len(udp.Payload) > 0 {
+				observedUDP[sp] = struct{}{}
+				observedUDP[dp] = struct{}{}
+				udpPayloads++
+				if looksLikeDTLSRecord(udp.Payload) {
+					dtlsLike++
+				}
+				if looksLikeCoAPMessage(udp.Payload) {
+					coapLike++
 				}
 			}
 			payload = udp.Payload
@@ -212,7 +256,24 @@ func analyze(path string, tcpPorts, udpPorts []uint16) (*report, error) {
 	bs := computeByteStats(freq)
 	rep.Entropy = bs.entropy
 	rep.ASCIIRatio = bs.asciiRatio
+
+	rep.ObservedTCPPorts = setToSortedPorts(observedTCP)
+	rep.ObservedUDPPorts = setToSortedPorts(observedUDP)
+
+	rep.ProtocolGuess, rep.GuessConfidence, rep.GuessNotes = guessProtocol(rep, tcpPayloads, udpPayloads, dtlsLike, coapLike, mqttSeen)
 	return rep, nil
+}
+
+func setToSortedPorts(m map[uint16]struct{}) []uint16 {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]uint16, 0, len(m))
+	for p := range m {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }
 
 type byteStats struct {
@@ -260,6 +321,104 @@ func log2Bin(n int) int {
 	return b
 }
 
+func guessProtocol(r *report, tcpPayloads, udpPayloads, dtlsLike, coapLike int, mqttSeen bool) (string, float64, []string) {
+	if r == nil {
+		return "unknown", 0, []string{"nil report"}
+	}
+	if tcpPayloads == 0 && udpPayloads == 0 {
+		return "unknown", 0, []string{"no TCP/UDP payloads matched"}
+	}
+
+	if udpPayloads > 0 && tcpPayloads == 0 {
+		dtlsRatio := float64(dtlsLike) / float64(udpPayloads)
+		if dtlsRatio >= 0.6 {
+			return "dtls", dtlsRatio, []string{fmt.Sprintf("dtls_like_ratio=%.2f", dtlsRatio)}
+		}
+		coapRatio := float64(coapLike) / float64(udpPayloads)
+		if coapRatio >= 0.6 {
+			return "coap-udp", coapRatio, []string{fmt.Sprintf("coap_like_ratio=%.2f", coapRatio)}
+		}
+		conf := math.Max(dtlsRatio, coapRatio)
+		return "udp-unknown", conf, []string{
+			fmt.Sprintf("dtls_like_ratio=%.2f", dtlsRatio),
+			fmt.Sprintf("coap_like_ratio=%.2f", coapRatio),
+		}
+	}
+
+	if tcpPayloads > 0 && udpPayloads == 0 {
+		if mqttSeen {
+			return "mqtt", 0.9, []string{"found \"MQTT\" marker in TCP payload stream"}
+		}
+
+		uniqueSizes := countNonZeroBins(r.SizeBinsLog2)
+		if r.Entropy < 7.2 {
+			conf := 0.65
+			if uniqueSizes >= 4 {
+				conf = 0.8
+			}
+			return "iotbci-sudoku", conf, []string{
+				fmt.Sprintf("entropy=%.2f (<7.2)", r.Entropy),
+				fmt.Sprintf("unique_size_bins=%d", uniqueSizes),
+			}
+		}
+
+		conf := 0.7
+		if uniqueSizes <= 2 {
+			conf = 0.85
+		}
+		return "pure-aead", conf, []string{
+			fmt.Sprintf("entropy=%.2f", r.Entropy),
+			fmt.Sprintf("unique_size_bins=%d", uniqueSizes),
+		}
+	}
+
+	// Mixed TCP+UDP capture.
+	if mqttSeen {
+		return "mqtt", 0.6, []string{"found \"MQTT\" marker in TCP payload stream", "mixed TCP/UDP capture"}
+	}
+	return "unknown", 0.4, []string{"mixed TCP/UDP capture"}
+}
+
+func countNonZeroBins(m map[int]int) int {
+	if len(m) == 0 {
+		return 0
+	}
+	n := 0
+	for _, v := range m {
+		if v > 0 {
+			n++
+		}
+	}
+	return n
+}
+
+func looksLikeDTLSRecord(payload []byte) bool {
+	if len(payload) < 3 {
+		return false
+	}
+	ct := payload[0]
+	if ct != 20 && ct != 21 && ct != 22 && ct != 23 && ct != 24 {
+		return false
+	}
+	// DTLS 1.0/1.2 uses 0xfeff / 0xfefd.
+	if payload[1] != 0xFE {
+		return false
+	}
+	return payload[2] == 0xFD || payload[2] == 0xFF
+}
+
+func looksLikeCoAPMessage(payload []byte) bool {
+	if len(payload) < 4 {
+		return false
+	}
+	ver := payload[0] >> 6
+	if ver != 1 {
+		return false
+	}
+	tkl := payload[0] & 0x0F
+	return tkl <= 8
+}
+
 func parsePorts(s string) ([]uint16, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -295,6 +454,10 @@ func renderMarkdown(r *report) string {
 - Input: %s
 - TCP ports: %v
 - UDP ports: %v
+- Observed TCP ports: %v
+- Observed UDP ports: %v
+- Protocol guess: %s (confidence %.2f)
+- Guess notes: %s
 
 ## Summary
 
@@ -317,6 +480,11 @@ func renderMarkdown(r *report) string {
 		r.Input,
 		r.TCPPorts,
 		r.UDPPorts,
+		r.ObservedTCPPorts,
+		r.ObservedUDPPorts,
+		r.ProtocolGuess,
+		r.GuessConfidence,
+		strings.Join(r.GuessNotes, "; "),
 		r.Packets,
 		r.Bytes,
 		r.Entropy,
@@ -352,6 +520,10 @@ func renderHTML(r *report) string {
     <div><span class="k">Input:</span> <code>%s</code></div>
     <div><span class="k">TCP ports:</span> %v</div>
     <div><span class="k">UDP ports:</span> %v</div>
+    <div><span class="k">Observed TCP ports:</span> %v</div>
+    <div><span class="k">Observed UDP ports:</span> %v</div>
+    <div><span class="k">Protocol guess:</span> <b>%s</b> (%.2f)</div>
+    <div><span class="k">Guess notes:</span> %s</div>
   </div>
 
   <h2>Summary</h2>
@@ -380,6 +552,11 @@ func renderHTML(r *report) string {
 		r.Input,
 		r.TCPPorts,
 		r.UDPPorts,
+		r.ObservedTCPPorts,
+		r.ObservedUDPPorts,
+		r.ProtocolGuess,
+		r.GuessConfidence,
+		escapePre(strings.Join(r.GuessNotes, "; ")),
 		r.Packets,
 		r.Bytes,
 		r.Entropy,
