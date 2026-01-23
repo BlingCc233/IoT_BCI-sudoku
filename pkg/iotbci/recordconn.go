@@ -32,9 +32,11 @@ type recordConn struct {
 	rxSeq uint64
 
 	writeMu sync.Mutex
+	readMu  sync.Mutex
 	readBuf bytes.Buffer
 
-	nonceBuf [12]byte
+	txNonceBuf [12]byte
+	rxNonceBuf [12]byte
 }
 
 func NewRecordConn(base net.Conn, method AEADMethod, txKey []byte, rxKey []byte, txSalt [4]byte, rxSalt [4]byte) (net.Conn, error) {
@@ -102,10 +104,10 @@ func (c *recordConn) CloseRead() error {
 	return nil
 }
 
-func (c *recordConn) makeNonce(salt [4]byte, seq uint64) []byte {
-	copy(c.nonceBuf[:4], salt[:])
-	binary.BigEndian.PutUint64(c.nonceBuf[4:], seq)
-	return c.nonceBuf[:]
+func (c *recordConn) makeNonce(dst *[12]byte, salt [4]byte, seq uint64) []byte {
+	copy(dst[:4], salt[:])
+	binary.BigEndian.PutUint64(dst[4:], seq)
+	return dst[:]
 }
 
 func (c *recordConn) Write(p []byte) (int, error) {
@@ -133,7 +135,7 @@ func (c *recordConn) Write(p []byte) (int, error) {
 			chunk = p[:maxPlain]
 		}
 
-		nonce := c.makeNonce(c.txSalt, c.txSeq)
+		nonce := c.makeNonce(&c.txNonceBuf, c.txSalt, c.txSeq)
 		ciphertext := c.aeadTx.Seal(nil, nonce, chunk, nil)
 		c.txSeq++
 
@@ -162,6 +164,9 @@ func (c *recordConn) Read(p []byte) (int, error) {
 		return c.Conn.Read(p)
 	}
 
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+
 	if c.readBuf.Len() > 0 {
 		return c.readBuf.Read(p)
 	}
@@ -180,7 +185,7 @@ func (c *recordConn) Read(p []byte) (int, error) {
 		return 0, err
 	}
 
-	nonce := c.makeNonce(c.rxSalt, c.rxSeq)
+	nonce := c.makeNonce(&c.rxNonceBuf, c.rxSalt, c.rxSeq)
 	plaintext, err := c.aeadRx.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		return 0, ErrDecryptFailed
