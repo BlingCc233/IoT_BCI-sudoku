@@ -13,6 +13,7 @@ This folder contains the complete protocol spec, threat model, engineering notes
 - `doc/BENCHMARKS.md`
 - `doc/CAPTURE.md`
 - `doc/DEPLOYMENT.md`
+- `doc/GIT_REMOTES.md`
 
 ## Quickstart
 

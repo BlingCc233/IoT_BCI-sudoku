@@ -5,9 +5,12 @@ bin/
 *.pcap
 *.pcapng
 *.log
-report_out/
-bench.json
+
+# Bench/evidence outputs (generated; force-add if you want to version them)
+bench*.json
+attack_report.json
 evidence_out/
+report_out/
 evidence_tmp_run*/
 
 # Go
@@ -15,3 +18,26 @@ evidence_tmp_run*/
 *.out
 /coverage/
 /tmp/
+
+# Dashboards (generated)
+dashboard_out/
+dashboard_evidence/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.nav
+*.out
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+*.xdv
+
+# TeX compiled PDFs in template root (keep figures under tex/pic/)
+tex/*.pdf
