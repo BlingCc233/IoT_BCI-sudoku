@@ -1,14 +1,35 @@
 package sudoku
 
+import "sync"
+
 // Grid represents a 4x4 Sudoku grid (values 1..4).
 //
 // Internally we index cells as 0..15 (row-major, 4 columns).
 type Grid [16]uint8
 
+var (
+	allGridsOnce sync.Once
+	allGrids     []Grid
+)
+
 // GenerateAllGrids returns all valid 4x4 Sudoku grids.
 //
 // NOTE: This is deterministic and independent of the key/material used by the protocol.
 func GenerateAllGrids() []Grid {
+	src := allGridsRef()
+	out := make([]Grid, len(src))
+	copy(out, src)
+	return out
+}
+
+func allGridsRef() []Grid {
+	allGridsOnce.Do(func() {
+		allGrids = generateAllGrids()
+	})
+	return allGrids
+}
+
+func generateAllGrids() []Grid {
 	var grids []Grid
 	var g Grid
 

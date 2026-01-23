@@ -55,6 +55,9 @@ type Conn struct {
 
 	rng         *rand.Rand
 	paddingRate float32
+
+	writeMu  sync.Mutex
+	writeBuf []byte
 }
 
 func NewConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int, record bool) *Conn {
@@ -78,6 +81,7 @@ func NewConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int, record 
 		hintBuf:     make([]byte, 0, 4),
 		rng:         localRng,
 		paddingRate: rate,
+		writeBuf:    make([]byte, 0, 4096),
 	}
 	if record {
 		sc.recorder = new(bytes.Buffer)
@@ -142,32 +146,51 @@ func (sc *Conn) Write(p []byte) (int, error) {
 		return 0, nil
 	}
 
-	out := make([]byte, 0, len(p)*6)
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
+
+	needed := len(p)*6 + 16
+	if cap(sc.writeBuf) < needed {
+		sc.writeBuf = make([]byte, 0, needed)
+	}
+	out := sc.writeBuf[:0]
+
 	pads := sc.table.PaddingPool
 	padLen := len(pads)
+	rng := sc.rng
+	padRate := sc.paddingRate
+	padThreshold := uint32(float64(padRate) * 4294967295.0)
+	encodeTable := &sc.table.EncodeTable
+
+	fastIndex := func(n int) int {
+		// NOTE: This is a fast mapping from uniform uint32 -> [0,n),
+		// which is acceptable for traffic appearance randomness.
+		return int(uint64(rng.Uint32()) * uint64(n) >> 32)
+	}
 
 	for _, b := range p {
-		if sc.rng.Float32() < sc.paddingRate {
-			out = append(out, pads[sc.rng.Intn(padLen)])
+		if rng.Uint32() <= padThreshold {
+			out = append(out, pads[fastIndex(padLen)])
 		}
 
-		puzzles := sc.table.EncodeTable[b]
-		puzzle := puzzles[sc.rng.Intn(len(puzzles))]
-		perm := perm4[sc.rng.Intn(len(perm4))]
+		puzzles := (*encodeTable)[b]
+		puzzle := puzzles[fastIndex(len(puzzles))]
+		perm := perm4[fastIndex(len(perm4))]
 
 		for _, idx := range perm {
-			if sc.rng.Float32() < sc.paddingRate {
-				out = append(out, pads[sc.rng.Intn(padLen)])
+			if rng.Uint32() <= padThreshold {
+				out = append(out, pads[fastIndex(padLen)])
 			}
 			out = append(out, puzzle[idx])
 		}
 	}
 
-	if sc.rng.Float32() < sc.paddingRate {
-		out = append(out, pads[sc.rng.Intn(padLen)])
+	if rng.Uint32() <= padThreshold {
+		out = append(out, pads[fastIndex(padLen)])
 	}
 
 	_, err := sc.Conn.Write(out)
+	sc.writeBuf = out[:0]
 	return len(p), err
 }
 

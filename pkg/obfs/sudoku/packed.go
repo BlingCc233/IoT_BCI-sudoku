@@ -28,10 +28,11 @@ type PackedConn struct {
 	readBitBuf uint64
 	readBits   int
 
-	rng         *rand.Rand
-	paddingRate float32
-	padMarker   byte
-	padPool     []byte
+	rng          *rand.Rand
+	paddingRate  float32
+	padThreshold uint32
+	padMarker    byte
+	padPool      []byte
 }
 
 func NewPackedConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int) *PackedConn {
@@ -55,6 +56,12 @@ func NewPackedConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int) *
 		writeBuf:    make([]byte, 0, 4096),
 		rng:         localRng,
 		paddingRate: rate,
+		padThreshold: func() uint32 {
+			if rate >= 1 {
+				return ^uint32(0)
+			}
+			return uint32(float64(rate) * 4294967295.0)
+		}(),
 	}
 
 	pc.padMarker = table.layout.padMarker
@@ -90,14 +97,18 @@ func (pc *PackedConn) CloseRead() error {
 }
 
 func (pc *PackedConn) getPaddingByte() byte {
-	return pc.padPool[pc.rng.Intn(len(pc.padPool))]
+	return pc.padPool[pc.fastIndex(len(pc.padPool))]
 }
 
 func (pc *PackedConn) maybeAddPadding(out []byte) []byte {
-	if pc.rng.Float32() < pc.paddingRate {
+	if pc.rng.Uint32() <= pc.padThreshold {
 		out = append(out, pc.getPaddingByte())
 	}
 	return out
+}
+
+func (pc *PackedConn) fastIndex(n int) int {
+	return int(uint64(pc.rng.Uint32()) * uint64(n) >> 32)
 }
 
 func (pc *PackedConn) encodeGroup(group6b byte) byte {

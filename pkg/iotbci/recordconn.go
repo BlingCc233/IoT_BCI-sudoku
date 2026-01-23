@@ -35,6 +35,10 @@ type recordConn struct {
 	readMu  sync.Mutex
 	readBuf bytes.Buffer
 
+	writeBuf    []byte
+	rxCipherBuf []byte
+	rxPlainBuf  []byte
+
 	txNonceBuf [12]byte
 	rxNonceBuf [12]byte
 }
@@ -118,7 +122,8 @@ func (c *recordConn) Write(p []byte) (int, error) {
 		return c.Conn.Write(p)
 	}
 
-	maxPlain := int(^uint16(0)) - c.aeadTx.Overhead()
+	overhead := c.aeadTx.Overhead()
+	maxPlain := int(^uint16(0)) - overhead
 	if maxPlain <= 0 {
 		return 0, fmt.Errorf("invalid aead overhead")
 	}
@@ -135,8 +140,13 @@ func (c *recordConn) Write(p []byte) (int, error) {
 			chunk = p[:maxPlain]
 		}
 
+		needCipherCap := len(chunk) + overhead
+		if cap(c.writeBuf) < needCipherCap {
+			c.writeBuf = make([]byte, 0, needCipherCap)
+		}
+
 		nonce := c.makeNonce(&c.txNonceBuf, c.txSalt, c.txSeq)
-		ciphertext := c.aeadTx.Seal(nil, nonce, chunk, nil)
+		ciphertext := c.aeadTx.Seal(c.writeBuf[:0], nonce, chunk, nil)
 		c.txSeq++
 
 		if len(ciphertext) > int(^uint16(0)) {
@@ -149,6 +159,7 @@ func (c *recordConn) Write(p []byte) (int, error) {
 		if err := writeFull(c.Conn, ciphertext); err != nil {
 			return total, err
 		}
+		c.writeBuf = ciphertext[:0]
 
 		total += len(chunk)
 		p = p[len(chunk):]
@@ -180,13 +191,19 @@ func (c *recordConn) Read(p []byte) (int, error) {
 		return 0, fmt.Errorf("%w: invalid record length %d", ErrProtocolViolation, n)
 	}
 
-	ciphertext := make([]byte, n)
+	if cap(c.rxCipherBuf) < n {
+		c.rxCipherBuf = make([]byte, n)
+	}
+	ciphertext := c.rxCipherBuf[:n]
 	if _, err := io.ReadFull(c.Conn, ciphertext); err != nil {
 		return 0, err
 	}
 
 	nonce := c.makeNonce(&c.rxNonceBuf, c.rxSalt, c.rxSeq)
-	plaintext, err := c.aeadRx.Open(nil, nonce, ciphertext, nil)
+	if cap(c.rxPlainBuf) < n {
+		c.rxPlainBuf = make([]byte, 0, n)
+	}
+	plaintext, err := c.aeadRx.Open(c.rxPlainBuf[:0], nonce, ciphertext, nil)
 	if err != nil {
 		return 0, ErrDecryptFailed
 	}

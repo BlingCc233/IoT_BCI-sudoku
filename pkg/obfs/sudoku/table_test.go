@@ -15,6 +15,11 @@ func TestNewTableAndTableSet(t *testing.T) {
 	if len(t1.DecodeMap) == 0 || len(t1.EncodeTable[0]) == 0 {
 		t.Fatalf("table not initialized")
 	}
+	enc := t1.EncodeTable[0][0]
+	key := packHintsToKey(enc)
+	if got, ok := t1.DecodeMap[key]; !ok || got != 0 {
+		t.Fatalf("decode mismatch: got=%d ok=%v", got, ok)
+	}
 
 	t2, err := NewTable("seed-1", "prefer_ascii")
 	if err != nil {

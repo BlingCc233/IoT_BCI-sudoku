@@ -5,11 +5,25 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/rand"
+	"sync"
 	"time"
 )
 
 var (
 	ErrInvalidSudokuMapMiss = errors.New("sudoku: decode map miss")
+)
+
+type tableCacheEntry struct {
+	once sync.Once
+	t    *Table
+	err  error
+}
+
+var (
+	tableCache sync.Map // map[cacheKey]*tableCacheEntry
+
+	comb4Once sync.Once
+	comb4     [][4]uint8
 )
 
 type Table struct {
@@ -36,6 +50,47 @@ func NewTableWithCustom(key string, mode string, customPattern string) (*Table, 
 		return nil, err
 	}
 
+	cacheKey := key + "\x00" + layout.name
+	entryAny, _ := tableCache.LoadOrStore(cacheKey, &tableCacheEntry{})
+	entry := entryAny.(*tableCacheEntry)
+	entry.once.Do(func() {
+		entry.t, entry.err = buildTableWithLayout(key, layout)
+		if entry.err != nil {
+			tableCache.Delete(cacheKey)
+		}
+	})
+	if entry.err != nil {
+		return nil, entry.err
+	}
+	t := entry.t
+
+	_ = start // reserved for future: record init time in metrics/debug builds
+	return t, nil
+}
+
+func comb4Ref() [][4]uint8 {
+	comb4Once.Do(func() {
+		// Precompute combinations of 4 positions out of 16.
+		combinations := make([][4]uint8, 0, 1820)
+		var comb [4]uint8
+		var gen func(start, k, idx int)
+		gen = func(start, k, idx int) {
+			if k == 0 {
+				combinations = append(combinations, comb)
+				return
+			}
+			for i := start; i <= 16-k; i++ {
+				comb[idx] = uint8(i)
+				gen(i+1, k-1, idx+1)
+			}
+		}
+		gen(0, 4, 0)
+		comb4 = combinations
+	})
+	return comb4
+}
+
+func buildTableWithLayout(key string, layout *byteLayout) (*Table, error) {
 	t := &Table{
 		DecodeMap: make(map[uint32]byte, 256*64),
 		IsASCII:   layout.name == "ascii",
@@ -44,7 +99,7 @@ func NewTableWithCustom(key string, mode string, customPattern string) (*Table, 
 	t.PaddingPool = append(t.PaddingPool, layout.paddingPool...)
 
 	// Generate all grids and deterministically shuffle them with key.
-	allGrids := GenerateAllGrids()
+	allGrids := allGridsRef()
 	h := sha256.Sum256([]byte(key))
 	seed := int64(binary.BigEndian.Uint64(h[:8]))
 	rng := rand.New(rand.NewSource(seed))
@@ -53,21 +108,7 @@ func NewTableWithCustom(key string, mode string, customPattern string) (*Table, 
 	copy(shuffled, allGrids)
 	rng.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
 
-	// Precompute combinations of 4 positions out of 16.
-	combinations := make([][4]uint8, 0, 1820)
-	var comb [4]uint8
-	var gen func(start, k, idx int)
-	gen = func(start, k, idx int) {
-		if k == 0 {
-			combinations = append(combinations, comb)
-			return
-		}
-		for i := start; i <= 16-k; i++ {
-			comb[idx] = uint8(i)
-			gen(i+1, k-1, idx+1)
-		}
-	}
-	gen(0, 4, 0)
+	combinations := comb4Ref()
 
 	// Build per-byte mapping.
 	for byteVal := 0; byteVal < 256; byteVal++ {
@@ -117,8 +158,6 @@ func NewTableWithCustom(key string, mode string, customPattern string) (*Table, 
 			t.DecodeMap[key] = byte(byteVal)
 		}
 	}
-
-	_ = start // reserved for future: record init time in metrics/debug builds
 	return t, nil
 }
 
