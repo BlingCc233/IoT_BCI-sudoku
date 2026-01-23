@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{.Title}}</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --border: #e5e7eb;
+        --card: #ffffff;
+        --accent: #2563eb;
+        --good: #16a34a;
+        --bad: #dc2626;
+        --chip: #f3f4f6;
+        --shadow: 0 6px 18px rgba(17, 24, 39, 0.08);
+
+        --sudoku: #6d28d9;
+        --sudoku2: #a78bfa;
+        --coap: #16a34a;
+        --aead: #0ea5e9;
+        --dtls: #f97316;
+        --mqtt: #ef4444;
+        --other: #64748b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.45;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+
+      header {
+        border-bottom: 1px solid var(--border);
+        background: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 3;
+      }
+      .head {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 16px 20px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 18px;
+        letter-spacing: 0.2px;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 12px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .nav {
+        margin-top: 10px;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .nav a {
+        display: inline-block;
+        font-size: 12px;
+        padding: 6px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--card);
+      }
+
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 16px 20px 48px;
+      }
+      section {
+        margin-top: 20px;
+      }
+      section h2 {
+        margin: 0 0 10px;
+        font-size: 16px;
+      }
+      .desc {
+        color: var(--muted);
+        font-size: 12px;
+        margin: 0 0 12px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      @media (max-width: 980px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .grid2 {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        padding: 12px;
+      }
+      .kpi {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .kpi .v {
+        font-size: 22px;
+        font-weight: 800;
+      }
+      .kpi .u {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .chip {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: var(--chip);
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .list {
+        margin: 0;
+        padding-left: 16px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .list li {
+        margin: 2px 0;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        background: rgba(17, 24, 39, 0.04);
+        padding: 2px 6px;
+        border-radius: 8px;
+        border: 1px solid rgba(17, 24, 39, 0.06);
+      }
+      .table-wrap {
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        min-width: 980px;
+      }
+      th,
+      td {
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+        white-space: nowrap;
+      }
+      th {
+        background: #f9fafb;
+        color: #374151;
+        text-align: left;
+        font-weight: 700;
+      }
+      tr:hover td {
+        background: #fafafa;
+      }
+      td.proto code {
+        font-weight: 700;
+      }
+      tr.sudoku td.proto code {
+        color: var(--sudoku);
+      }
+      tr.packed td.proto code {
+        color: var(--sudoku);
+      }
+      .pill {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        border: 1px solid var(--border);
+        background: var(--chip);
+      }
+      .pill.good {
+        color: var(--good);
+        border-color: rgba(22, 163, 74, 0.25);
+        background: rgba(22, 163, 74, 0.06);
+      }
+      .pill.bad {
+        color: var(--bad);
+        border-color: rgba(220, 38, 38, 0.25);
+        background: rgba(220, 38, 38, 0.06);
+      }
+      figure {
+        margin: 0;
+      }
+      figcaption {
+        font-size: 12px;
+        color: #374151;
+        margin: 0 0 8px;
+      }
+      svg.chart {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .foot {
+        margin-top: 28px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="head">
+        <h1>{{.Title}}</h1>
+        <div class="sub">
+          <div>Generated: <code>{{.Now}}</code></div>
+          {{if .Bench}}<div>Micro-bench: loaded</div>{{end}}
+          {{if .Evidence}}<div>Evidence: loaded</div>{{end}}
+          {{if .Attack}}<div>Threat: loaded</div>{{end}}
+        </div>
+        <div class="nav">
+          {{if .Bench}}<a href="#bench">Micro-bench</a>{{end}} {{if .Evidence}}<a href="#evidence">Evidence</a>{{end}}
+          {{if .Attack}}<a href="#threat">Threat</a>{{end}} <a href="#defs">Definitions</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      {{if .Bench}}
+      <section id="bench">
+        <h2>Micro-benchmark</h2>
+        <p class="desc">
+          In-process benchmark; useful for comparing CPU/alloc overhead. For packet-level traffic appearance, use the
+          “Evidence” section with pcap reports.
+        </p>
+
+        <div class="grid">
+          <div class="card">
+            <div class="kpi">
+              <div class="v">{{f2 .BenchSummary.LowestOverheadRatio}}x</div>
+              <div class="u">lowest overhead · <span class="chip">{{.BenchSummary.LowestOverheadName}}</span></div>
+            </div>
+            <div class="note">Lower is better (closer to 1.0).</div>
+          </div>
+          <div class="card">
+            <div class="kpi">
+              <div class="v">{{f4 .BenchSummary.LowestRTTMs}}</div>
+              <div class="u">ms avg RTT · <span class="chip">{{.BenchSummary.LowestRTTName}}</span></div>
+            </div>
+            <div class="note">Lower is better.</div>
+          </div>
+          <div class="card">
+            <div class="kpi">
+              <div class="v">{{f2 .BenchSummary.LowestMemMB}}</div>
+              <div class="u">MB heap(in-use) · <span class="chip">{{.BenchSummary.LowestMemName}}</span></div>
+            </div>
+            <div class="note">Avg duration: {{f2 .BenchSummary.AvgDurationMs}} ms · Max sys: {{f2 .BenchSummary.MaxSysMemMB}} MB</div>
+          </div>
+        </div>
+
+        {{if .BenchInsights}}
+        <div class="card" style="margin-top: 12px">
+          <div class="note" style="margin-bottom: 6px"><b>Computed deltas (Sudoku Packed vs Pure)</b></div>
+          <ul class="list">
+            {{range .BenchInsights}}
+            <li>{{.}}</li>
+            {{end}}
+          </ul>
+        </div>
+        {{end}}
+
+        <div class="grid2" style="margin-top: 12px">
+          <figure class="card">
+            <figcaption>Overhead ratio (wire / payload) ↓</figcaption>
+            <svg class="chart" id="bench_overhead"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Avg RTT (ms) ↓</figcaption>
+            <svg class="chart" id="bench_rtt_avg"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>P95 RTT (ms) ↓</figcaption>
+            <svg class="chart" id="bench_rtt_p95"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Heap in-use (MB) ↓</figcaption>
+            <svg class="chart" id="bench_heap_inuse"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Duration (ms) ↓</figcaption>
+            <svg class="chart" id="bench_duration"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Wire bytes total ↓</figcaption>
+            <svg class="chart" id="bench_wire_bytes"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Payload throughput (bytes/s) ↑</figcaption>
+            <svg class="chart" id="bench_payload_tp"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Wire throughput (bytes/s) ↑</figcaption>
+            <svg class="chart" id="bench_wire_tp"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Wire entropy (bits/byte) ↑</figcaption>
+            <svg class="chart" id="bench_entropy"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Wire ASCII ratio ↑</figcaption>
+            <svg class="chart" id="bench_ascii"></svg>
+          </figure>
+        </div>
+
+        <div class="grid2" style="margin-top: 12px">
+          <figure class="card">
+            <figcaption>Write size distribution (log2 bytes, normalized)</figcaption>
+            <svg class="chart" id="bench_write_size"></svg>
+            <div class="note">Shows packetization “shape”; padding tends to broaden the distribution.</div>
+          </figure>
+          <figure class="card">
+            <figcaption>Write inter-arrival distribution (log2 ms, normalized)</figcaption>
+            <svg class="chart" id="bench_write_iat"></svg>
+            <div class="note">Bins are based on consecutive <code>Write()</code> gaps.</div>
+          </figure>
+        </div>
+
+        <div class="card" style="margin-top: 12px">
+          <div class="note" style="margin-bottom: 8px"><b>Results table</b></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Protocol</th>
+                  <th>Overhead</th>
+                  <th>Wire</th>
+                  <th>Avg RTT</th>
+                  <th>P95 RTT</th>
+                  <th>Heap(inuse)</th>
+                  <th>Duration</th>
+                  <th>Payload TP</th>
+                  <th>Wire TP</th>
+                  <th>Entropy</th>
+                  <th>ASCII</th>
+                  <th>Write calls</th>
+                  <th>Active wire</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range (sorted .Bench.Results)}}
+                <tr class="{{protoClass .Name}}">
+                  <td class="proto"><code>{{.Name}}</code></td>
+                  <td>{{f2 .OverheadRatio}}x</td>
+                  <td>{{hb .WireBytesTotal}}</td>
+                  <td>{{f4 .AvgRTTMillis}} ms</td>
+                  <td>{{f4 .P95RTTMillis}} ms</td>
+                  <td>{{mb .PeakHeapInuseBytes}} MB</td>
+                  <td>{{f2 .DurationMillis}} ms</td>
+                  <td>{{hbps .PayloadThroughputBps}}</td>
+                  <td>{{hbps .WireThroughputBps}}</td>
+                  <td>{{f4 .WireEntropy}}</td>
+                  <td>{{f4 .WireASCIIRatio}}</td>
+                  <td>{{.WireWriteCalls}}</td>
+                  <td>{{f2 .WireActiveDurationMillis}} ms</td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      {{end}}
+
+      {{if .Evidence}}
+      <section id="evidence">
+        <h2>Evidence (loopback traffic)</h2>
+        <p class="desc">
+          End-to-end runs via real sockets. If capture is enabled, each scenario links to its per-scenario pcap report
+          and protocol fingerprinting result.
+        </p>
+
+        <div class="grid">
+          <div class="card">
+            <div class="kpi">
+              <div class="v">{{f2 .EvidenceSummary.LowestOverheadRatio}}x</div>
+              <div class="u">lowest overhead · <span class="chip">{{.EvidenceSummary.LowestOverheadName}}</span></div>
+            </div>
+            <div class="note">Lower is better (closer to 1.0).</div>
+          </div>
+          <div class="card">
+            <div class="kpi">
+              <div class="v">{{f4 .EvidenceSummary.LowestRTTMs}}</div>
+              <div class="u">ms avg RTT · <span class="chip">{{.EvidenceSummary.LowestRTTName}}</span></div>
+            </div>
+            <div class="note">Lower is better.</div>
+          </div>
+          <div class="card">
+            <div class="kpi">
+              <div class="v">{{f2 .EvidenceSummary.LowestMemMB}}</div>
+              <div class="u">MB heap(in-use) · <span class="chip">{{.EvidenceSummary.LowestMemName}}</span></div>
+            </div>
+            <div class="note">Avg duration: {{f2 .EvidenceSummary.AvgDurationMs}} ms · Max sys: {{f2 .EvidenceSummary.MaxSysMemMB}} MB</div>
+          </div>
+        </div>
+
+        {{if .EvidenceInsights}}
+        <div class="card" style="margin-top: 12px">
+          <div class="note" style="margin-bottom: 6px"><b>Computed deltas (Sudoku Packed vs Pure)</b></div>
+          <ul class="list">
+            {{range .EvidenceInsights}}
+            <li>{{.}}</li>
+            {{end}}
+          </ul>
+        </div>
+        {{end}}
+
+        <div class="grid2" style="margin-top: 12px">
+          <figure class="card">
+            <figcaption>Overhead ratio (wire / payload) ↓</figcaption>
+            <svg class="chart" id="evidence_overhead"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Avg RTT (ms) ↓</figcaption>
+            <svg class="chart" id="evidence_rtt_avg"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>P95 RTT (ms) ↓</figcaption>
+            <svg class="chart" id="evidence_rtt_p95"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Heap in-use (MB) ↓</figcaption>
+            <svg class="chart" id="evidence_heap_inuse"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Duration (ms) ↓</figcaption>
+            <svg class="chart" id="evidence_duration"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Wire bytes total ↓</figcaption>
+            <svg class="chart" id="evidence_wire_bytes"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Payload throughput (bytes/s) ↑</figcaption>
+            <svg class="chart" id="evidence_payload_tp"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Wire throughput (bytes/s) ↑</figcaption>
+            <svg class="chart" id="evidence_wire_tp"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Wire entropy (bits/byte) ↑</figcaption>
+            <svg class="chart" id="evidence_entropy"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Wire ASCII ratio ↑</figcaption>
+            <svg class="chart" id="evidence_ascii"></svg>
+          </figure>
+        </div>
+
+        <div class="grid2" style="margin-top: 12px">
+          <figure class="card">
+            <figcaption>Write size distribution (log2 bytes, normalized)</figcaption>
+            <svg class="chart" id="evidence_write_size"></svg>
+          </figure>
+          <figure class="card">
+            <figcaption>Write inter-arrival distribution (log2 ms, normalized)</figcaption>
+            <svg class="chart" id="evidence_write_iat"></svg>
+          </figure>
+        </div>
+
+        <div class="card" style="margin-top: 12px">
+          <div class="note" style="margin-bottom: 8px"><b>Scenarios</b></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Scenario</th>
+                  <th>Overhead</th>
+                  <th>Wire</th>
+                  <th>Avg RTT</th>
+                  <th>P95 RTT</th>
+                  <th>Heap(inuse)</th>
+                  <th>Capture</th>
+                  <th>Guess</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .Evidence.Scenarios}}
+                <tr class="{{protoClass .Name}}">
+                  <td class="proto"><code>{{.Name}}</code></td>
+                  <td>{{f2 .Metrics.OverheadRatio}}x</td>
+                  <td>{{hb .Metrics.WireBytesTotal}}</td>
+                  <td>{{f4 .Metrics.AvgRTTMillis}} ms</td>
+                  <td>{{f4 .Metrics.P95RTTMillis}} ms</td>
+                  <td>{{mb .Metrics.PeakHeapInuseBytes}} MB</td>
+                  <td>
+                    {{if .Capture}} {{if .Capture.Enabled}} {{if .Capture.Error}}
+                    <span class="note">error: {{.Capture.Error}}</span>
+                    {{else}}
+                    <a href="{{.Capture.ReportDir}}/report.html">pcap report</a>
+                    {{end}} {{else}}
+                    <span class="note">disabled</span>
+                    {{end}} {{else}}
+                    <span class="note">n/a</span>
+                    {{end}}
+                  </td>
+                  <td class="note">{{guessFromCapture .}}</td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+          <div class="note" style="margin-top: 8px">
+            Protocol guessing is computed by <code>cmd/iotbci-report</code> from payload features
+            (DTLS/CoAP/MQTT/pure-AEAD/Sudoku).
+          </div>
+        </div>
+      </section>
+      {{end}}
+
+      {{if .Attack}}
+      <section id="threat">
+        <h2>Threat simulation</h2>
+        <p class="desc">Replay / MITM tamper / probe flood simulations generated by <code>cmd/iotbci-attack</code>.</p>
+        <div class="card">
+          <div class="table-wrap">
+            <table style="min-width: 900px">
+              <thead>
+                <tr>
+                  <th>Scenario</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Expected</th>
+                  <th>Server error</th>
+                  <th>Client error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range .Attack.Scenarios}}
+                <tr>
+                  <td class="proto"><code>{{.Name}}</code></td>
+                  <td>{{if .Success}}<span class="pill good">PASS</span>{{else}}<span class="pill bad">FAIL</span>{{end}}</td>
+                  <td>{{f2 .DurationMs}} ms</td>
+                  <td class="note">{{.Expected}}</td>
+                  <td class="note">{{.ServerError}}</td>
+                  <td class="note">{{.ClientError}}</td>
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      {{end}}
+
+      <section id="defs">
+        <h2>Definitions</h2>
+        <div class="card">
+          <ul class="list">
+            <li><code>overhead_ratio = wire_bytes_total / payload_bytes_total</code> (lower is better)</li>
+            <li><code>wire_entropy</code>: Shannon entropy of wire bytes (bits/byte); random-looking ciphertext tends toward 8</li>
+            <li><code>wire_ascii_ratio</code>: fraction of wire bytes in printable ASCII range (0..1)</li>
+            <li><code>write_size_bins_log2[i]</code>: counts of <code>Write()</code> sizes within [2^i, 2^(i+1)) bytes</li>
+            <li><code>write_interarrival_ms_bins_log2[i]</code>: counts of <code>Write()</code> gaps within log2(ms) bins</li>
+          </ul>
+        </div>
+        <div class="foot">Generated by <code>cmd/iotbci-dashboard</code>. For capture-based reports: <code>cmd/iotbci-report</code>.</div>
+      </section>
+    </main>
+
+    <script>
+      const DATA = {
+        bench: {{if .Bench}}{{toJSON .Bench}}{{else}}null{{end}},
+        evidence: {{if .Evidence}}{{toJSON .Evidence}}{{else}}null{{end}},
+      };
+
+      const COLORS = {
+        sudoku: getComputedStyle(document.documentElement).getPropertyValue('--sudoku').trim(),
+        sudoku2: getComputedStyle(document.documentElement).getPropertyValue('--sudoku2').trim(),
+        coap: getComputedStyle(document.documentElement).getPropertyValue('--coap').trim(),
+        aead: getComputedStyle(document.documentElement).getPropertyValue('--aead').trim(),
+        dtls: getComputedStyle(document.documentElement).getPropertyValue('--dtls').trim(),
+        mqtt: getComputedStyle(document.documentElement).getPropertyValue('--mqtt').trim(),
+        other: getComputedStyle(document.documentElement).getPropertyValue('--other').trim(),
+      };
+
+      function protoColor(name) {
+        const n = String(name || '').toLowerCase();
+        if (n.includes('iotbci-sudoku-packed')) return COLORS.sudoku;
+        if (n.includes('iotbci-sudoku')) return COLORS.sudoku2;
+        if (n.includes('coap')) return COLORS.coap;
+        if (n.includes('pure-aead')) return COLORS.aead;
+        if (n.includes('dtls')) return COLORS.dtls;
+        if (n.includes('mqtt')) return COLORS.mqtt;
+        return COLORS.other;
+      }
+
+      function fmt(v, digits) {
+        if (!isFinite(v)) return 'n/a';
+        return v.toFixed(digits ?? 2);
+      }
+
+      function humanBytes(n) {
+        const abs = Math.abs(n);
+        if (abs < 1024) return String(Math.round(n)) + ' B';
+        if (abs < 1024 * 1024) return (n / 1024).toFixed(2) + ' KB';
+        if (abs < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(2) + ' MB';
+        return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+      }
+
+      function humanBps(bps) {
+        return humanBytes(bps) + '/s';
+      }
+
+      function el(tag, attrs, text) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const e = document.createElementNS(ns, tag);
+        if (attrs) for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+        if (text !== undefined) e.textContent = text;
+        return e;
+      }
+
+      function sortBy(rows, getValue, descending) {
+        const out = rows.slice();
+        out.sort((a, b) => {
+          const va = getValue(a) ?? 0;
+          const vb = getValue(b) ?? 0;
+          return descending ? vb - va : va - vb;
+        });
+        return out;
+      }
+
+      function renderBars(svgId, rows, getValue, opts) {
+        const svg = document.getElementById(svgId);
+        if (!svg || !rows || rows.length === 0) return;
+
+        const width = 920;
+        const labelW = opts?.labelW ?? 240;
+        const right = 80;
+        const top = 18;
+        const barH = 16;
+        const gap = 8;
+        const maxV = opts?.maxV ?? Math.max(...rows.map((r) => getValue(r) ?? 0));
+        const height = top + rows.length * (barH + gap) + 20;
+
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        svg.innerHTML = '';
+
+        const plotW = width - labelW - right;
+        const ticks = opts?.ticks ?? 5;
+
+        for (let i = 0; i <= ticks; i++) {
+          const x = labelW + (plotW * i) / ticks;
+          svg.appendChild(el('line', { x1: x, y1: 0, x2: x, y2: height, stroke: '#e5e7eb' }));
+          const tv = (maxV * i) / ticks;
+          svg.appendChild(
+            el(
+              'text',
+              { x: x, y: 12, 'text-anchor': 'middle', 'font-size': 10, fill: '#6b7280' },
+              opts?.fmtTick ? opts.fmtTick(tv) : fmt(tv, 2),
+            ),
+          );
+        }
+
+        rows.forEach((r, idx) => {
+          const y = top + idx * (barH + gap);
+          const name = r.name || '';
+          const v = getValue(r) ?? 0;
+          const w = maxV > 0 ? (v / maxV) * plotW : 0;
+          svg.appendChild(
+            el('text', { x: labelW - 8, y: y + barH - 3, 'text-anchor': 'end', 'font-size': 11, fill: '#111827' }, name),
+          );
+          svg.appendChild(el('rect', { x: labelW, y: y, width: Math.max(0, w), height: barH, fill: protoColor(name), rx: 3 }));
+          svg.appendChild(
+            el(
+              'text',
+              { x: labelW + Math.max(0, w) + 6, y: y + barH - 3, 'text-anchor': 'start', 'font-size': 11, fill: '#111827' },
+              opts?.fmtValue ? opts.fmtValue(v) : fmt(v, 2),
+            ),
+          );
+        });
+
+        if (opts?.refLine !== undefined && isFinite(opts.refLine) && maxV > 0) {
+          const x = labelW + (opts.refLine / maxV) * plotW;
+          svg.appendChild(el('line', { x1: x, y1: 0, x2: x, y2: height, stroke: '#111827', 'stroke-dasharray': '3 3' }));
+        }
+      }
+
+      function sum(a) {
+        return a.reduce((acc, v) => acc + (v || 0), 0);
+      }
+
+      function pickSeries(results) {
+        const want = ['iotbci-sudoku-pure', 'iotbci-sudoku-packed', 'pure-aead', 'coap-udp', 'dtls', 'mqtt'];
+        const out = [];
+        for (const needle of want) {
+          const hit = results.find((r) => String(r.name || '').includes(needle));
+          if (hit) out.push(hit);
+        }
+        if (out.length === 0) return results.slice(0, Math.min(4, results.length));
+        return out;
+      }
+
+      function lastNonZeroBin(series, binsFn) {
+        let last = 0;
+        for (const s of series) {
+          const bins = (binsFn(s) || []).slice(0, 32);
+          for (let i = bins.length - 1; i >= 0; i--) {
+            if (bins[i]) {
+              if (i > last) last = i;
+              break;
+            }
+          }
+        }
+        return last;
+      }
+
+      function renderLines(svgId, series, binsFn, opts) {
+        const svg = document.getElementById(svgId);
+        if (!svg || !series || series.length === 0) return;
+
+        const width = 920;
+        const height = 260;
+        const padL = 44;
+        const padR = 18;
+        const padT = 30;
+        const padB = 34;
+
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        svg.innerHTML = '';
+
+        const maxBin = Math.min(16, lastNonZeroBin(series, binsFn) + 1);
+        const plotW = width - padL - padR;
+        const plotH = height - padT - padB;
+
+        svg.appendChild(el('line', { x1: padL, y1: padT + plotH, x2: padL + plotW, y2: padT + plotH, stroke: '#111827' }));
+        svg.appendChild(el('line', { x1: padL, y1: padT, x2: padL, y2: padT + plotH, stroke: '#111827' }));
+
+        for (let i = 0; i <= maxBin; i += 2) {
+          const x = padL + (i / maxBin) * plotW;
+          svg.appendChild(el('line', { x1: x, y1: padT + plotH, x2: x, y2: padT + plotH + 4, stroke: '#111827' }));
+          svg.appendChild(el('text', { x: x, y: padT + plotH + 16, 'text-anchor': 'middle', 'font-size': 10, fill: '#6b7280' }, String(i)));
+        }
+
+        const yTicks = 4;
+        for (let i = 0; i <= yTicks; i++) {
+          const y = padT + plotH - (i / yTicks) * plotH;
+          svg.appendChild(el('line', { x1: padL, y1: y, x2: padL + plotW, y2: y, stroke: '#e5e7eb' }));
+          svg.appendChild(el('text', { x: padL - 6, y: y + 3, 'text-anchor': 'end', 'font-size': 10, fill: '#6b7280' }, (i / yTicks).toFixed(2)));
+        }
+
+        series.forEach((s, idx) => {
+          const name = s.name || '';
+          const bins = (binsFn(s) || []).slice(0, maxBin + 1);
+          const total = sum(bins);
+          const pts = [];
+          for (let i = 0; i <= maxBin; i++) {
+            const frac = total > 0 ? (bins[i] || 0) / total : 0;
+            const x = padL + (i / maxBin) * plotW;
+            const y = padT + plotH - frac * plotH;
+            pts.push([x, y]);
+          }
+
+          const d = pts
+            .map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ' ' + p[1].toFixed(1))
+            .join(' ');
+          const c = protoColor(name);
+          svg.appendChild(el('path', { d: d, fill: 'none', stroke: c, 'stroke-width': 2 }));
+
+          const lx = padL + 8 + (idx % 2) * 240;
+          const ly = 14 + Math.floor(idx / 2) * 14;
+          svg.appendChild(el('line', { x1: lx, y1: ly, x2: lx + 22, y2: ly, stroke: c, 'stroke-width': 3 }));
+          svg.appendChild(el('text', { x: lx + 28, y: ly + 4, 'font-size': 11, fill: '#111827' }, name));
+        });
+
+        svg.appendChild(
+          el('text', { x: padL + plotW, y: height - 8, 'text-anchor': 'end', 'font-size': 10, fill: '#6b7280' }, opts?.xLabel || 'bin (log2)'),
+        );
+        svg.appendChild(el('text', { x: padL, y: padT - 10, 'text-anchor': 'start', 'font-size': 10, fill: '#6b7280' }, 'normalized count'));
+      }
+
+      function renderDataset(prefix, results) {
+        if (!results || results.length === 0) return;
+
+        renderBars(prefix + 'overhead', sortBy(results, (r) => r.overhead_ratio ?? 0, false), (r) => r.overhead_ratio ?? 0, {
+          refLine: 1.0,
+          fmtValue: (v) => fmt(v, 2) + 'x',
+          fmtTick: (v) => fmt(v, 2),
+        });
+
+        renderBars(prefix + 'rtt_avg', sortBy(results, (r) => r.avg_rtt_ms ?? 0, false), (r) => r.avg_rtt_ms ?? 0, {
+          fmtValue: (v) => fmt(v, 4),
+        });
+
+        renderBars(prefix + 'rtt_p95', sortBy(results, (r) => r.p95_rtt_ms ?? 0, false), (r) => r.p95_rtt_ms ?? 0, {
+          fmtValue: (v) => fmt(v, 4),
+        });
+
+        renderBars(
+          prefix + 'heap_inuse',
+          sortBy(results, (r) => (r.peak_heap_inuse_bytes ?? 0) / 1024 / 1024, false),
+          (r) => (r.peak_heap_inuse_bytes ?? 0) / 1024 / 1024,
+          { fmtValue: (v) => fmt(v, 2) + ' MB' },
+        );
+
+        renderBars(prefix + 'duration', sortBy(results, (r) => r.duration_ms ?? 0, false), (r) => r.duration_ms ?? 0, {
+          fmtValue: (v) => fmt(v, 2) + ' ms',
+        });
+
+        renderBars(prefix + 'wire_bytes', sortBy(results, (r) => r.wire_bytes_total ?? 0, false), (r) => r.wire_bytes_total ?? 0, {
+          fmtValue: (v) => humanBytes(v),
+        });
+
+        renderBars(prefix + 'payload_tp', sortBy(results, (r) => r.payload_throughput_bps ?? 0, true), (r) => r.payload_throughput_bps ?? 0, {
+          fmtValue: (v) => humanBps(v),
+        });
+
+        renderBars(prefix + 'wire_tp', sortBy(results, (r) => r.wire_throughput_bps ?? 0, true), (r) => r.wire_throughput_bps ?? 0, {
+          fmtValue: (v) => humanBps(v),
+        });
+
+        renderBars(prefix + 'entropy', sortBy(results, (r) => r.wire_entropy ?? 0, true), (r) => r.wire_entropy ?? 0, {
+          maxV: 8.0,
+          fmtValue: (v) => fmt(v, 3),
+          fmtTick: (v) => fmt(v, 2),
+        });
+
+        renderBars(prefix + 'ascii', sortBy(results, (r) => r.wire_ascii_ratio ?? 0, true), (r) => r.wire_ascii_ratio ?? 0, {
+          maxV: 1.0,
+          fmtValue: (v) => fmt(v, 3),
+          fmtTick: (v) => fmt(v, 2),
+        });
+
+        const series = pickSeries(results);
+        renderLines(prefix + 'write_size', series, (r) => r.wire_write_size_bins_log2 || [], { xLabel: 'log2(bytes)' });
+        renderLines(prefix + 'write_iat', series, (r) => r.wire_write_interarrival_ms_bins_log2 || [], { xLabel: 'log2(ms)' });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        if (DATA.bench && DATA.bench.results) renderDataset('bench_', DATA.bench.results);
+        if (DATA.evidence && DATA.evidence.scenarios) {
+          const results = DATA.evidence.scenarios.map((s) => s.metrics).filter(Boolean);
+          renderDataset('evidence_', results);
+        }
+      });
+    </script>
+  </body>
+</html>
+
