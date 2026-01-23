@@ -3,7 +3,7 @@
 本手册的目标：
 
 1. 让你能“按顺序读懂”仓库：从文档到代码，从入口到核心层，再到工具链与对比评估。
-2. 让评审/答辩可以“一键复现”：编译、运行、抓包、生成报告、输出论文指标。
+2. 让任何访问者都能“一键复现”：编译、运行、抓包、生成报告、输出对比指标。
 3. 让后续扩展可控：知道每个模块的边界、调用关系、状态机、关键安全点、资源上限点。
 
 如果你只想快速跑通，请先看「快速开始」。如果你想系统理解与 review，请看「推荐阅读顺序」和「代码导览」。
@@ -45,7 +45,7 @@ go run ./cmd/iotbci -c configs/dev_client_uot.json -timeout 30s
 
 预期行为：client 会根据 `bci` 配置生成 BCI 帧并做 echo 校验（哈希一致即通过）。
 
-### 0.3 运行对比基线与论文证据集
+### 0.3 运行对比基线与证据集
 
 - micro-bench（主要反映编解码/加密开销，输出 JSON）：
 
@@ -53,13 +53,31 @@ go run ./cmd/iotbci -c configs/dev_client_uot.json -timeout 30s
 go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json
 ```
 
-- 论文证据集（真实回环 socket，含 DTLS/MQTT/CoAP/纯 AEAD/IoTBCI-Sudoku；输出目录）：
+- 证据集（真实回环 socket，含 DTLS/MQTT/CoAP/纯 AEAD/IoTBCI-Sudoku；输出目录）：
 
 ```bash
 go run ./cmd/iotbci-evidence -out_dir evidence_out -messages 200 -size 256 -timeout 30s
 ```
 
 输出：`evidence_out/evidence.json` + 每个场景 `evidence_out/<scenario>/metrics.json`
+
+- 攻击模拟（重放 / MITM 篡改 / 探测洪泛，输出 JSON）：
+
+```bash
+go run ./cmd/iotbci-attack -timeout 10s -out attack_report.json
+```
+
+- 统一可视化（bench/evidence/attack 一页查看）：
+
+```bash
+go run ./cmd/iotbci-dashboard -bench bench.json -evidence evidence_out/evidence.json -attack attack_report.json -out_dir dashboard_out
+```
+
+- LaTeX 图表/表格生成（输出到 `tex/generated/`，可直接 `\\input{...}` 插入 LaTeX 文档）：
+
+```bash
+go run ./cmd/iotbci-texgen -bench bench.json -out_dir tex/generated
+```
 
 ### 0.4 可选：抓包 + 报告（只抓指定端口流量）
 
@@ -91,7 +109,7 @@ go run ./cmd/iotbci-report -in capture.pcap -out_dir report_out -tcp_ports 9000
 5) `doc/SECURITY.md`：威胁模型与应对、参数选择建议  
 6) `doc/OBFS_SUDOKU.md`：数独外观层（padding/轮转/可解析性）  
 7) `doc/FALLBACK.md`：异常流量回落/沉默策略  
-8) `doc/BENCHMARKS.md` + `doc/CAPTURE.md`：论文级对比与抓包报告  
+8) `doc/BENCHMARKS.md` + `doc/CAPTURE.md`：对比评估与抓包报告  
 9) `doc/DEPLOYMENT.md`：密钥/证书/吊销与跨平台构建
 
 ### 1.2 代码阅读顺序（从入口到核心）
@@ -366,7 +384,7 @@ go run ./cmd/iotbci-keygen -issue-cert -master-priv-hex <64bytes-hex> -subject d
 go test ./...
 ```
 
-### 9.2 竞态检测（建议论文阶段也跑一次）
+### 9.2 竞态检测（发布前建议跑一次）
 
 ```bash
 go test -race ./...
@@ -410,10 +428,15 @@ go tool cover -html=cover.out -o cover.html
 - `wire_bytes_total`：线上写出的 payload 字节总量（双向，不含 TCP/IP 头）
 - `overhead_ratio = wire_bytes_total / payload_bytes_total`
 - `avg_rtt_ms` / `p95_rtt_ms`：每次收发 RTT（更偏 CPU 编码/加密开销）
+- `wire_write_calls` / `wire_read_calls`：线上读写调用次数（便于估计 syscall/分片/flush 行为）
+- `wire_write_size_bins_log2`：写入尺寸分布（log2 bins，外观特征：长度）
+- `wire_write_interarrival_ms_bins_log2`：写入间隔分布（ms，log2 bins，外观特征：时序）
+- `wire_active_duration_ms`：从首个写到最后一个写的活跃区间（ms）
 - `wire_entropy` / `wire_ascii_ratio`：线上 payload 字节的熵值/ASCII 比例
-- `peak_*`：Go runtime 采样的峰值内存（论文需要注明采样方式和误差）
+- `peak_*`：Go runtime 采样的峰值内存（如果要写报告，建议注明采样方式与误差范围）
+- `payload_throughput_bps` / `wire_throughput_bps`：吞吐（bytes/s，按 `duration_ms` 计算）
 
-### 10.2 `cmd/iotbci-evidence` 输出（论文证据集）
+### 10.2 `cmd/iotbci-evidence` 输出（证据集）
 
 目录结构：
 
@@ -422,7 +445,7 @@ go tool cover -html=cover.out -o cover.html
 - `evidence_out/<scenario>/capture.pcap`：可选抓包
 - `evidence_out/<scenario>/pcap_report/report.{json,md,html}`：可选报告
 
-建议论文对比以 evidence 的真实 socket 流量为主，micro-bench 为辅（见 `doc/BENCHMARKS.md` 的说明）。
+建议以 evidence 的真实 socket 流量为主，micro-bench 为辅（见 `doc/BENCHMARKS.md` 的说明）。
 
 ### 10.3 `cmd/iotbci-report` 输出（抓包报告）
 
@@ -459,7 +482,7 @@ go tool cover -html=cover.out -o cover.html
 
 ## 12. 扩展与二次开发（最小心智负担）
 
-如果你要在论文后继续把它做成可部署协议，建议按如下方式扩展：
+如果你要继续把它做成可部署协议，建议按如下方式扩展：
 
 1) 优先使用 `apis/*` 对外 API（减少直接依赖内部结构）
 2) 把“设备侧资源上限”（replay cache size、mux queued bytes、握手 size 上限）做成 config 可控项

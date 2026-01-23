@@ -62,6 +62,9 @@ cert, _ := iotbci.IssueCert(masterPriv, "device-001", pub, notBefore, notAfter, 
 - 协议节点（server/client）：`cmd/iotbci`
 - 证书/密钥工具：`cmd/iotbci-keygen`
 - 对比/证据集工具：`cmd/iotbci-bench`、`cmd/iotbci-evidence`、`cmd/iotbci-capture`、`cmd/iotbci-report`
+- 攻击模拟：`cmd/iotbci-attack`
+- 统一可视化：`cmd/iotbci-dashboard`
+- LaTeX 图表/表格生成：`cmd/iotbci-texgen`
 
 示例（本机构建）：
 

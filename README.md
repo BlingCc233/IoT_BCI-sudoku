@@ -24,6 +24,9 @@ Public Go API: `apis/README.md`
 
 - Run micro-benchmarks: `go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json`
 - Run thesis-style evidence (loopback TCP/UDP + optional pcap capture/report): `go run ./cmd/iotbci-evidence -out_dir evidence_out -messages 200 -size 256 -timeout 30s`
+- Simulate attacks (replay/MITM tamper/probe flood): `go run ./cmd/iotbci-attack -timeout 10s -out attack_report.json`
+- Generate unified HTML dashboard: `go run ./cmd/iotbci-dashboard -bench bench.json -evidence evidence_out/evidence.json -attack attack_report.json -out_dir dashboard_out`
+- Generate LaTeX tables/figures: `go run ./cmd/iotbci-texgen -bench bench.json -out_dir tex/generated`
 - Run protocol (loopback dev configs):
   - Server: `go run ./cmd/iotbci -c configs/dev_server_stream.json -timeout 30s`
   - Client: `go run ./cmd/iotbci -c configs/dev_client_stream.json -timeout 30s`
