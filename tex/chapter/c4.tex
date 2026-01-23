@@ -21,11 +21,27 @@
 \end{itemize}
 
 \section{micro-bench 对比结果}
-本节给出 micro-bench 的对比表格与图（若缺失，请先运行 \texttt{cmd/iotbci-texgen} 生成）。
+本节给出 micro-bench 的对比表格与图（若缺失，请先运行 \texttt{cmd/iotbci-texgen} 生成）。本文生成图表所用的最小命令示例如下（以消息数 1000、payload 256B 为例）：
+
+\begin{verbatim}
+cd tex
+go run ../cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out /tmp/bench.json
+go run ../cmd/iotbci-evidence -out_dir /tmp/evidence_out -messages 1000 -size 256 -timeout 60s
+go run ../cmd/iotbci-texgen -bench /tmp/bench.json -evidence /tmp/evidence_out/evidence.json -out_dir generated
+latexmk main.tex
+\end{verbatim}
 
 \IfFileExists{generated/bench_table.tex}{\input{generated/bench_table}}{\textit{(缺少 generated/bench\_table.tex，请先运行 cmd/iotbci-texgen 生成)}}
 
 \IfFileExists{generated/bench_figures.tex}{\input{generated/bench_figures}}{\textit{(缺少 generated/bench\_figures.tex，请先运行 cmd/iotbci-texgen 生成)}}
+
+\subsection{结果摘要（micro-bench）}
+由表\ref{tab:iotbci-bench-metrics}与图\ref{fig:iotbci-bench-overhead}--\ref{fig:iotbci-bench-write-iat}可得到如下结论：
+\begin{itemize}
+  \item \textbf{带宽开销}：IoT\_BCI-Sudoku 引入了外观层编码与随机 padding，因此相较纯 AEAD/CoAP/DTLS 的带宽开销更高；但 packed 相比 pure 将 \texttt{overhead\_ratio} 从 4.53x 降至 3.03x（约 33\%），体现了小包聚合对边界开销的改善。
+  \item \textbf{时延与内存}：micro-bench 的 RTT 主要反映编解码与加解密开销。packed 相比 pure 将平均 RTT 从 0.0627ms 降至 0.0536ms（约 14\%）。同时，packed 模式由于额外的打包缓冲与状态，峰值 heap(in-use) 高于 pure（后续可针对缓冲复用与上限参数化进一步优化）。
+  \item \textbf{外观指标}：pure 模式使用 \texttt{prefer\_ascii}，wire ASCII 比例接近 1（0.987），对应更“可打印”的字节外观；entropy 模式（packed）则更接近二进制/高熵外观。写入大小/间隔分布（图\ref{fig:iotbci-bench-write-size}与图\ref{fig:iotbci-bench-write-iat}）可用于观察 padding 与聚合对包分布的扰动效果：例如 CoAP/UDP 的写入大小高度集中，而 Sudoku packed 会出现多峰分布。
+\end{itemize}
 
 \section{evidence 证据集对比结果}
 evidence 以真实 socket 端到端收发为主，适用于观察更贴近网络栈行为的外观特征与时延/吞吐波动。
@@ -33,6 +49,9 @@ evidence 以真实 socket 端到端收发为主，适用于观察更贴近网络
 \IfFileExists{generated/evidence_table.tex}{\input{generated/evidence_table}}{\textit{(缺少 generated/evidence\_table.tex，请先运行 cmd/iotbci-texgen 生成)}}
 
 \IfFileExists{generated/evidence_figures.tex}{\input{generated/evidence_figures}}{\textit{(缺少 generated/evidence\_figures.tex，请先运行 cmd/iotbci-texgen 生成)}}
+
+\subsection{结果摘要（evidence）}
+evidence 使用真实回环 TCP/UDP 进行端到端收发，其时延与吞吐会受到网络栈缓冲与调度噪声影响，但更贴近实际流量外观。表\ref{tab:iotbci-evidence-metrics}表明：Sudoku packed 相比 pure 仍显著降低了带宽开销；外观分布图（图\ref{fig:iotbci-evidence-write-size}与图\ref{fig:iotbci-evidence-write-iat}）进一步展示了 padding/聚合对长度与时序特征的扰动。
 
 \section{结果讨论：安全—效率—外观之间的权衡}
 从对比结果可以观察到：纯 AEAD 与轻量级 UDP/CoAP 方案在带宽开销上更接近理想值，但在身份认证、抗重放/抗 MITM 的工程语义以及外观对抗能力方面存在不足；IoT\_BCI-Sudoku 通过在加密之上叠加可控的外观层，提升了抗侧写能力，但付出了额外字节比例与部分处理开销。
@@ -47,4 +66,3 @@ evidence 以真实 socket 端到端收发为主，适用于观察更贴近网络
   \item 字节熵值与 ASCII 比例是否符合外观层设计预期；
   \item 协议指纹识别器对 Sudoku 的置信度与混淆效果。
 \end{itemize}
-
