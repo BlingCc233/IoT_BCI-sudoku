@@ -43,11 +43,34 @@ fi
 
 git reset --hard "${SOURCE_BRANCH}"
 
-for p in "${SENSITIVE_PATHS[@]}"; do
-  # Use git rm so the target branch doesn't keep the paths.
-  # Intentionally unquoted to allow simple globs like bench*.json.
-  git rm -r --ignore-unmatch -f ${p} >/dev/null 2>&1 || true
-done
+export IOTBCI_SENSITIVE_PATHS
+IOTBCI_SENSITIVE_PATHS="$(printf '%s\n' "${SENSITIVE_PATHS[@]}")"
+python3 - <<'PY'
+import glob
+import os
+import shutil
+from pathlib import Path
+
+patterns = os.environ.get("IOTBCI_SENSITIVE_PATHS", "").splitlines()
+repo_root = Path(".").resolve()
+
+for pattern in patterns:
+    if not pattern.strip():
+        continue
+    for match in glob.glob(pattern):
+        path = Path(match)
+        try:
+            resolved = path.resolve()
+        except FileNotFoundError:
+            continue
+        if repo_root not in resolved.parents and resolved != repo_root:
+            raise SystemExit(f"refusing to delete outside repo: {path}")
+        if path.is_dir():
+            shutil.rmtree(path)
+        elif path.exists():
+            path.unlink()
+PY
+unset IOTBCI_SENSITIVE_PATHS
 
 git add -A
 git commit -m "sync ${TARGET_BRANCH} from ${SOURCE_BRANCH} (remove private thesis)" || true
