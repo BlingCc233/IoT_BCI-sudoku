@@ -8,6 +8,8 @@ import (
 	"github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci"
 )
 
+var silentHoldDuration = 2 * time.Second
+
 func HandleSuspicious(wrapper net.Conn, rawConn net.Conn, fallbackAddr string, action string) {
 	if rawConn == nil {
 		return
@@ -16,7 +18,7 @@ func HandleSuspicious(wrapper net.Conn, rawConn net.Conn, fallbackAddr string, a
 	switch action {
 	case "silent":
 		_, _ = io.Copy(io.Discard, rawConn)
-		time.Sleep(2 * time.Second)
+		time.Sleep(silentHoldDuration)
 		_ = rawConn.Close()
 		return
 	default:

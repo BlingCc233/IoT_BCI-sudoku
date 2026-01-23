@@ -34,49 +34,7 @@ func Serve(ctx context.Context, cfg *Config) error {
 	defer ln.Close()
 	log.Printf("iotbci: server listening on %s (app=%s)", ln.Addr().String(), cfg.App)
 
-	go func() {
-		<-ctx.Done()
-		_ = ln.Close()
-	}()
-
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
-				return nil
-			}
-			return err
-		}
-		go func(raw net.Conn) {
-			defer func() { _ = raw.Close() }()
-
-			log.Printf("iotbci: accept %s -> %s", raw.RemoteAddr().String(), raw.LocalAddr().String())
-			sess, meta, err := iotbci.ServerHandshake(ctx, raw, opts)
-			if err != nil {
-				var se *iotbci.SuspiciousError
-				if errors.As(err, &se) {
-					log.Printf("iotbci: suspicious traffic from %s (%v), action=%s", raw.RemoteAddr().String(), se.Err, cfg.SuspiciousAction)
-					HandleSuspicious(se.Conn, raw, cfg.FallbackAddr, cfg.SuspiciousAction)
-					return
-				}
-				log.Printf("iotbci: handshake failed from %s: %v", raw.RemoteAddr().String(), err)
-				return
-			}
-			_ = meta
-			log.Printf("iotbci: handshake ok from %s", raw.RemoteAddr().String())
-
-			switch cfg.App {
-			case "stream", "":
-				_ = serveStreamEcho(sess)
-			case "mux":
-				_ = serveMuxEcho(ctx, sess)
-			case "uot":
-				_ = serveUoTEcho(sess)
-			default:
-				_ = sess.Close()
-			}
-		}(conn)
-	}
+	return serveLoop(ctx, cfg, opts, ln)
 }
 
 func serveStreamEcho(conn net.Conn) error {
@@ -168,5 +126,51 @@ func DialAndRun(ctx context.Context, cfg *Config) error {
 		return runUoTBCIEcho(ctx, sess, cfg.BCI)
 	default:
 		return fmt.Errorf("unknown app: %s", cfg.App)
+	}
+}
+
+func serveLoop(ctx context.Context, cfg *Config, opts *iotbci.ServerOptions, ln net.Listener) error {
+	go func() {
+		<-ctx.Done()
+		_ = ln.Close()
+	}()
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, net.ErrClosed) {
+				return nil
+			}
+			return err
+		}
+		go func(raw net.Conn) {
+			defer func() { _ = raw.Close() }()
+
+			log.Printf("iotbci: accept %s -> %s", raw.RemoteAddr().String(), raw.LocalAddr().String())
+			sess, meta, err := iotbci.ServerHandshake(ctx, raw, opts)
+			if err != nil {
+				var se *iotbci.SuspiciousError
+				if errors.As(err, &se) {
+					log.Printf("iotbci: suspicious traffic from %s (%v), action=%s", raw.RemoteAddr().String(), se.Err, cfg.SuspiciousAction)
+					HandleSuspicious(se.Conn, raw, cfg.FallbackAddr, cfg.SuspiciousAction)
+					return
+				}
+				log.Printf("iotbci: handshake failed from %s: %v", raw.RemoteAddr().String(), err)
+				return
+			}
+			_ = meta
+			log.Printf("iotbci: handshake ok from %s", raw.RemoteAddr().String())
+
+			switch cfg.App {
+			case "stream", "":
+				_ = serveStreamEcho(sess)
+			case "mux":
+				_ = serveMuxEcho(ctx, sess)
+			case "uot":
+				_ = serveUoTEcho(sess)
+			default:
+				_ = sess.Close()
+			}
+		}(conn)
 	}
 }
