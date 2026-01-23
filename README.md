@@ -1,5 +1,8 @@
 # IoT_BCI-sudoku
 
+[![Latest Release](https://img.shields.io/github/v/release/BlingCc233/IoT_BCI-sudoku?style=for-the-badge)](https://github.com/BlingCc233/IoT_BCI-sudoku/releases)
+[![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=for-the-badge)](./LICENSE)
+
 Sudoku is an IoT BCI (brain-computer interface) LAN communication protocol that provides:
 
 - A Sudoku-inspired ASCII/entropy traffic appearance layer (arbitrary padding + layout rotation)
@@ -13,7 +16,7 @@ Sudoku is an IoT BCI (brain-computer interface) LAN communication protocol that 
 
 ## Docs
 
-Start here: `doc/INDEX.md`
+Start here: `doc/USER_GUIDE.md` (usage + how to read the code) and `doc/INDEX.md` (full spec index)
 
 Public Go API: `apis/README.md`
 
