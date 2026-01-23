@@ -2,6 +2,8 @@
 
 This folder contains the complete protocol spec, threat model, engineering notes, and reproducible benchmark/capture workflows.
 
+- Start with: `doc/USER_GUIDE.md` (how to read/use/reproduce everything)
+
 - `doc/SPEC.md`
 - `doc/HANDSHAKE.md`
 - `doc/STATE_MACHINE.md`
