@@ -142,21 +142,36 @@ func RunDTLSOnUDP(ctx context.Context, cfg RunConfig, psk, listenAddr string, re
 	avg := avgDuration(rtts)
 	p95 := percentileDuration(rtts, 0.95)
 
+	ws := summarizeWire(clientStats, serverStats)
+	durSec := dur.Seconds()
+	var payloadBps, wireBps float64
+	if durSec > 0 {
+		payloadBps = float64(payloadBytes) / durSec
+		wireBps = float64(wireBytes) / durSec
+	}
+
 	return ProtocolResult{
-		Name:               "dtls-psk-aes128gcm",
-		Messages:           cfg.Messages,
-		PayloadSize:        cfg.PayloadSize,
-		PayloadBytesTotal:  payloadBytes,
-		WireBytesTotal:     wireBytes,
-		OverheadRatio:      float64(wireBytes) / float64(payloadBytes),
-		AvgRTTMillis:       float64(avg) / float64(time.Millisecond),
-		P95RTTMillis:       float64(p95) / float64(time.Millisecond),
-		WireEntropy:        bs.Entropy,
-		WireASCIIRatio:     bs.ASCIIRatio,
-		PeakHeapAllocBytes: peak.HeapAlloc,
-		PeakHeapInuseBytes: peak.HeapInuse,
-		PeakSysBytes:       peak.Sys,
-		DurationMillis:     float64(dur) / float64(time.Millisecond),
+		Name:                          "dtls-psk-aes128gcm",
+		Messages:                      cfg.Messages,
+		PayloadSize:                   cfg.PayloadSize,
+		PayloadBytesTotal:             payloadBytes,
+		WireBytesTotal:                wireBytes,
+		OverheadRatio:                 float64(wireBytes) / float64(payloadBytes),
+		AvgRTTMillis:                  float64(avg) / float64(time.Millisecond),
+		P95RTTMillis:                  float64(p95) / float64(time.Millisecond),
+		WireWriteCalls:                ws.writeCalls,
+		WireReadCalls:                 ws.readCalls,
+		WireWriteSizeBinsLog2:         ws.writeSizeBins,
+		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireActiveDurationMillis:      ws.activeDurationMillis,
+		WireEntropy:                   bs.Entropy,
+		WireASCIIRatio:                bs.ASCIIRatio,
+		PeakHeapAllocBytes:            peak.HeapAlloc,
+		PeakHeapInuseBytes:            peak.HeapInuse,
+		PeakSysBytes:                  peak.Sys,
+		PayloadThroughputBps:          payloadBps,
+		WireThroughputBps:             wireBps,
+		DurationMillis:                float64(dur) / float64(time.Millisecond),
 	}, nil
 }
 

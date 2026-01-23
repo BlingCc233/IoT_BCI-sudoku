@@ -28,8 +28,13 @@ go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json
 - `core_source_bytes`：核心库源码体积（`pkg/iotbci` + `pkg/obfs/sudoku`，不含测试）
 - `overhead_ratio`：`wire_bytes_total / payload_bytes_total`
 - `avg_rtt_ms` / `p95_rtt_ms`：单次收发处理延迟（使用 `net.Pipe`，主要反映编码/解码/加密的 CPU 开销）
+- `wire_write_calls` / `wire_read_calls`：线上读写调用次数（外观/实现细节提示）
+- `wire_write_size_bins_log2`：写入尺寸分布（log2 bins，外观特征：长度）
+- `wire_write_interarrival_ms_bins_log2`：写入间隔分布（ms，log2 bins，外观特征：时序）
+- `wire_active_duration_ms`：首写到末写的活跃区间（ms）
 - `wire_entropy` / `wire_ascii_ratio`：对“线上 payload 字节”计算的外观指标
 - `peak_*`：峰值内存（采样近似，论文需注明采样方法与误差来源）
+- `payload_throughput_bps` / `wire_throughput_bps`：吞吐（bytes/s，按 `duration_ms` 计算）
 
 当前 bench 默认包含：
 

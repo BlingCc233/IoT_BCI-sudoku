@@ -1,7 +1,7 @@
 package bench
 
 import (
-	"math"
+	"math/bits"
 	"net"
 	"sync/atomic"
 	"time"
@@ -19,6 +19,9 @@ type WireStats struct {
 	// WriteSizeBins is a log2 histogram of write sizes (0..31).
 	WriteSizeBins [32]atomic.Uint64
 
+	// WriteInterArrivalMsBins is a log2 histogram of inter-arrival times between write calls (0..31).
+	WriteInterArrivalMsBins [32]atomic.Uint64
+
 	FirstWriteUnixNano atomic.Int64
 	LastWriteUnixNano  atomic.Int64
 }
@@ -34,6 +37,28 @@ func (s *WireStats) SnapshotWrittenFreq() [256]uint64 {
 	return out
 }
 
+func (s *WireStats) SnapshotWriteSizeBins() [32]uint64 {
+	var out [32]uint64
+	if s == nil {
+		return out
+	}
+	for i := 0; i < 32; i++ {
+		out[i] = s.WriteSizeBins[i].Load()
+	}
+	return out
+}
+
+func (s *WireStats) SnapshotWriteInterArrivalMsBins() [32]uint64 {
+	var out [32]uint64
+	if s == nil {
+		return out
+	}
+	for i := 0; i < 32; i++ {
+		out[i] = s.WriteInterArrivalMsBins[i].Load()
+	}
+	return out
+}
+
 func (s *WireStats) recordWrite(p []byte) {
 	if len(p) == 0 {
 		return
@@ -45,7 +70,19 @@ func (s *WireStats) recordWrite(p []byte) {
 	if s.FirstWriteUnixNano.Load() == 0 {
 		s.FirstWriteUnixNano.CompareAndSwap(0, now)
 	}
-	s.LastWriteUnixNano.Store(now)
+	prev := s.LastWriteUnixNano.Swap(now)
+	if prev != 0 {
+		delta := now - prev
+		if delta < 0 {
+			delta = -delta
+		}
+		ms := uint64(delta) / uint64(time.Millisecond)
+		bin := bits.Len64(ms+1) - 1
+		if bin > 31 {
+			bin = 31
+		}
+		s.WriteInterArrivalMsBins[bin].Add(1)
+	}
 
 	for _, b := range p {
 		s.ByteFreq[b].Add(1)
@@ -67,14 +104,10 @@ func log2Bin(n int) int {
 	if n <= 0 {
 		return 0
 	}
-	b := int(math.Log2(float64(n)))
-	if b < 0 {
-		return 0
-	}
-	if b >= 31 {
+	if n >= 1<<31 {
 		return 31
 	}
-	return b
+	return bits.Len(uint(n)) - 1
 }
 
 type CountingConn struct {
