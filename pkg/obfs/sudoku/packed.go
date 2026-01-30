@@ -2,10 +2,7 @@ package sudoku
 
 import (
 	"bufio"
-	crypto_rand "crypto/rand"
-	"encoding/binary"
 	"io"
-	"math/rand"
 	"net"
 	"sync"
 )
@@ -28,7 +25,7 @@ type PackedConn struct {
 	readBitBuf uint64
 	readBits   int
 
-	rng          *rand.Rand
+	rng          fastRNG
 	paddingRate  float32
 	padThreshold uint32
 	padMarker    byte
@@ -36,12 +33,7 @@ type PackedConn struct {
 }
 
 func NewPackedConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int) *PackedConn {
-	var seedBytes [8]byte
-	if _, err := crypto_rand.Read(seedBytes[:]); err != nil {
-		binary.BigEndian.PutUint64(seedBytes[:], uint64(rand.Int63()))
-	}
-	seed := int64(binary.BigEndian.Uint64(seedBytes[:]))
-	localRng := rand.New(rand.NewSource(seed))
+	localRng := newFastRNG()
 
 	min := float32(paddingMinPct) / 100.0
 	rngRange := float32(paddingMaxPct-paddingMinPct) / 100.0
@@ -57,6 +49,9 @@ func NewPackedConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int) *
 		rng:         localRng,
 		paddingRate: rate,
 		padThreshold: func() uint32 {
+			if rate <= 0 {
+				return 0
+			}
 			if rate >= 1 {
 				return ^uint32(0)
 			}
@@ -101,7 +96,7 @@ func (pc *PackedConn) getPaddingByte() byte {
 }
 
 func (pc *PackedConn) maybeAddPadding(out []byte) []byte {
-	if pc.rng.Uint32() <= pc.padThreshold {
+	if pc.padThreshold != 0 && pc.rng.Uint32() <= pc.padThreshold {
 		out = append(out, pc.getPaddingByte())
 	}
 	return out
@@ -128,13 +123,16 @@ func (pc *PackedConn) Write(p []byte) (int, error) {
 		pc.writeBuf = make([]byte, 0, needed)
 	}
 	out := pc.writeBuf[:0]
+	hasPadding := pc.padThreshold != 0
 
 	i := 0
 	n := len(p)
 
 	// Align any pending bits.
 	for pc.bitCount > 0 && i < n {
-		out = pc.maybeAddPadding(out)
+		if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
 		b := p[i]
 		i++
 		pc.bitBuf = (pc.bitBuf << 8) | uint64(b)
@@ -147,7 +145,9 @@ func (pc *PackedConn) Write(p []byte) (int, error) {
 			} else {
 				pc.bitBuf &= (1 << pc.bitCount) - 1
 			}
-			out = pc.maybeAddPadding(out)
+			if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
+				out = append(out, pc.getPaddingByte())
+			}
 			out = append(out, pc.encodeGroup(group&0x3F))
 		}
 	}
@@ -162,13 +162,21 @@ func (pc *PackedConn) Write(p []byte) (int, error) {
 		g3 := ((b2 & 0x0F) << 2) | ((b3 >> 6) & 0x03)
 		g4 := b3 & 0x3F
 
-		out = pc.maybeAddPadding(out)
+		if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
 		out = append(out, pc.encodeGroup(g1))
-		out = pc.maybeAddPadding(out)
+		if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
 		out = append(out, pc.encodeGroup(g2))
-		out = pc.maybeAddPadding(out)
+		if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
 		out = append(out, pc.encodeGroup(g3))
-		out = pc.maybeAddPadding(out)
+		if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
 		out = append(out, pc.encodeGroup(g4))
 	}
 
@@ -185,21 +193,27 @@ func (pc *PackedConn) Write(p []byte) (int, error) {
 			} else {
 				pc.bitBuf &= (1 << pc.bitCount) - 1
 			}
-			out = pc.maybeAddPadding(out)
+			if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
+				out = append(out, pc.getPaddingByte())
+			}
 			out = append(out, pc.encodeGroup(group&0x3F))
 		}
 	}
 
 	// Residual bits: emit one group + pad marker.
 	if pc.bitCount > 0 {
-		out = pc.maybeAddPadding(out)
+		if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
 		group := byte(pc.bitBuf << (6 - pc.bitCount))
 		pc.bitBuf = 0
 		pc.bitCount = 0
 		out = append(out, pc.encodeGroup(group&0x3F))
 		out = append(out, pc.padMarker)
 	}
-	out = pc.maybeAddPadding(out)
+	if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
+		out = append(out, pc.getPaddingByte())
+	}
 
 	if len(out) > 0 {
 		_, err := pc.Conn.Write(out)

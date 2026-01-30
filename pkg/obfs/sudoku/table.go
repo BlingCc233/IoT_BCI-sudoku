@@ -180,3 +180,23 @@ func packHintsToKey(hints [4]byte) uint32 {
 	}
 	return uint32(hints[0])<<24 | uint32(hints[1])<<16 | uint32(hints[2])<<8 | uint32(hints[3])
 }
+
+func packHintsToKey4(b0, b1, b2, b3 byte) uint32 {
+	// Sorting network for 4 elements (bubble sort unrolled).
+	if b0 > b1 {
+		b0, b1 = b1, b0
+	}
+	if b2 > b3 {
+		b2, b3 = b3, b2
+	}
+	if b0 > b2 {
+		b0, b2 = b2, b0
+	}
+	if b1 > b3 {
+		b1, b3 = b3, b1
+	}
+	if b1 > b2 {
+		b1, b2 = b2, b1
+	}
+	return uint32(b0)<<24 | uint32(b1)<<16 | uint32(b2)<<8 | uint32(b3)
+}

@@ -3,10 +3,7 @@ package sudoku
 import (
 	"bufio"
 	"bytes"
-	crypto_rand "crypto/rand"
-	"encoding/binary"
 	"errors"
-	"math/rand"
 	"net"
 	"sync"
 )
@@ -51,26 +48,34 @@ type Conn struct {
 
 	rawBuf      []byte
 	pendingData []byte
-	hintBuf     []byte
+	hintBuf     [4]byte
+	hintCount   int
 
-	rng         *rand.Rand
-	paddingRate float32
+	rng          fastRNG
+	paddingRate  float32
+	padThreshold uint32
+	padPool      []byte
+	padLen       int
 
 	writeMu  sync.Mutex
 	writeBuf []byte
 }
 
 func NewConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int, record bool) *Conn {
-	var seedBytes [8]byte
-	if _, err := crypto_rand.Read(seedBytes[:]); err != nil {
-		binary.BigEndian.PutUint64(seedBytes[:], uint64(rand.Int63()))
-	}
-	seed := int64(binary.BigEndian.Uint64(seedBytes[:]))
-	localRng := rand.New(rand.NewSource(seed))
+	localRng := newFastRNG()
 
 	min := float32(paddingMinPct) / 100.0
 	rngRange := float32(paddingMaxPct-paddingMinPct) / 100.0
 	rate := min + localRng.Float32()*rngRange
+	threshold := func() uint32 {
+		if rate <= 0 {
+			return 0
+		}
+		if rate >= 1 {
+			return ^uint32(0)
+		}
+		return uint32(float64(rate) * 4294967295.0)
+	}()
 
 	sc := &Conn{
 		Conn:        c,
@@ -78,9 +83,11 @@ func NewConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int, record 
 		reader:      bufio.NewReaderSize(c, IOBufferSize),
 		rawBuf:      make([]byte, IOBufferSize),
 		pendingData: make([]byte, 0, 4096),
-		hintBuf:     make([]byte, 0, 4),
 		rng:         localRng,
 		paddingRate: rate,
+		padThreshold: threshold,
+		padPool:      table.PaddingPool,
+		padLen:       len(table.PaddingPool),
 		writeBuf:    make([]byte, 0, 4096),
 	}
 	if record {
@@ -155,38 +162,32 @@ func (sc *Conn) Write(p []byte) (int, error) {
 	}
 	out := sc.writeBuf[:0]
 
-	pads := sc.table.PaddingPool
-	padLen := len(pads)
-	rng := sc.rng
-	padRate := sc.paddingRate
-	padThreshold := uint32(float64(padRate) * 4294967295.0)
+	pads := sc.padPool
+	padLen := sc.padLen
+	rng := &sc.rng
+	padThreshold := sc.padThreshold
 	encodeTable := &sc.table.EncodeTable
-
-	fastIndex := func(n int) int {
-		// NOTE: This is a fast mapping from uniform uint32 -> [0,n),
-		// which is acceptable for traffic appearance randomness.
-		return int(uint64(rng.Uint32()) * uint64(n) >> 32)
-	}
+	hasPadding := padThreshold != 0 && padLen > 0
 
 	for _, b := range p {
-		if rng.Uint32() <= padThreshold {
-			out = append(out, pads[fastIndex(padLen)])
+		if hasPadding && rng.Uint32() <= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
 		}
 
 		puzzles := (*encodeTable)[b]
-		puzzle := puzzles[fastIndex(len(puzzles))]
-		perm := perm4[fastIndex(len(perm4))]
+		puzzle := puzzles[int(uint64(rng.Uint32())*uint64(len(puzzles))>>32)]
+		perm := perm4[int(uint64(rng.Uint32())*uint64(len(perm4))>>32)]
 
 		for _, idx := range perm {
-			if rng.Uint32() <= padThreshold {
-				out = append(out, pads[fastIndex(padLen)])
+			if hasPadding && rng.Uint32() <= padThreshold {
+				out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
 			}
 			out = append(out, puzzle[idx])
 		}
 	}
 
-	if rng.Uint32() <= padThreshold {
-		out = append(out, pads[fastIndex(padLen)])
+	if hasPadding && rng.Uint32() <= padThreshold {
+		out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
 	}
 
 	_, err := sc.Conn.Write(out)
@@ -219,20 +220,22 @@ func (sc *Conn) Read(p []byte) (int, error) {
 			}
 			sc.recordLock.Unlock()
 
+			layout := sc.table.layout
 			for _, b := range chunk {
-				if !sc.table.layout.isHint(b) {
+				if !layout.isHint(b) {
 					continue
 				}
 
-				sc.hintBuf = append(sc.hintBuf, b)
-				if len(sc.hintBuf) == 4 {
-					key := packHintsToKey([4]byte{sc.hintBuf[0], sc.hintBuf[1], sc.hintBuf[2], sc.hintBuf[3]})
+				sc.hintBuf[sc.hintCount] = b
+				sc.hintCount++
+				if sc.hintCount == 4 {
+					key := packHintsToKey4(sc.hintBuf[0], sc.hintBuf[1], sc.hintBuf[2], sc.hintBuf[3])
 					val, ok := sc.table.DecodeMap[key]
 					if !ok {
 						return 0, ErrInvalidSudokuMapMiss
 					}
 					sc.pendingData = append(sc.pendingData, val)
-					sc.hintBuf = sc.hintBuf[:0]
+					sc.hintCount = 0
 				}
 			}
 		}

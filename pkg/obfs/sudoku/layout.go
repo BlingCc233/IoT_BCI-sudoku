@@ -9,6 +9,7 @@ import (
 
 type byteLayout struct {
 	name        string
+	isASCII     bool
 	hintMask    byte
 	hintValue   byte
 	padMarker   byte
@@ -24,7 +25,7 @@ func (l *byteLayout) isHint(b byte) bool {
 		return true
 	}
 	// In prefer_ascii mode we also accept '\n' as an on-wire alias for 0x7F.
-	return l.name == "ascii" && b == '\n'
+	return l.isASCII && b == '\n'
 }
 
 func resolveLayout(mode string, customPattern string) (*byteLayout, error) {
@@ -50,6 +51,7 @@ func newASCIILayout() *byteLayout {
 	}
 	return &byteLayout{
 		name:        "ascii",
+		isASCII:     true,
 		hintMask:    0x40,
 		hintValue:   0x40,
 		padMarker:   0x3F,
@@ -88,6 +90,7 @@ func newEntropyLayout() *byteLayout {
 	}
 	return &byteLayout{
 		name:        "entropy",
+		isASCII:     false,
 		hintMask:    0x90,
 		hintValue:   0x00,
 		padMarker:   0x80,
@@ -212,6 +215,7 @@ func newCustomLayout(pattern string) (*byteLayout, error) {
 
 	return &byteLayout{
 		name:        fmt.Sprintf("custom(%s)", cleaned),
+		isASCII:     false,
 		hintMask:    xMask,
 		hintValue:   xMask,
 		padMarker:   padding[0],
