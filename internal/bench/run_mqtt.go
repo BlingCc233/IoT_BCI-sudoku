@@ -3,6 +3,7 @@ package bench
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -13,7 +14,7 @@ import (
 )
 
 func RunMQTT(ctx context.Context, cfg RunConfig) (ProtocolResult, error) {
-	return RunMQTTOnTCP(ctx, cfg, "127.0.0.1:0", nil)
+	return RunMQTTOnTLS(ctx, cfg, "127.0.0.1:0", nil)
 }
 
 func RunMQTTOnTCP(ctx context.Context, cfg RunConfig, listenAddr string, ready ReadyFunc) (ProtocolResult, error) {
@@ -236,6 +237,260 @@ func RunMQTTOnTCP(ctx context.Context, cfg RunConfig, listenAddr string, ready R
 	}, nil
 }
 
+func RunMQTTOnTLS(ctx context.Context, cfg RunConfig, listenAddr string, ready ReadyFunc) (ProtocolResult, error) {
+	if cfg.Messages <= 0 {
+		cfg.Messages = 1000
+	}
+	if cfg.PayloadSize <= 0 {
+		cfg.PayloadSize = 256
+	}
+
+	certs, err := newLocalCertBundle()
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	serverTLS := &tls.Config{
+		MinVersion:   tls.VersionTLS13,
+		MaxVersion:   tls.VersionTLS13,
+		Certificates: []tls.Certificate{certs.ServerCert},
+	}
+	clientTLS := &tls.Config{
+		MinVersion: tls.VersionTLS13,
+		MaxVersion: tls.VersionTLS13,
+		RootCAs:    certs.CAPool,
+		// When using tls.Client (not tls.Dial), ServerName must be set.
+		// Go treats IP strings specially and will verify against IP SANs.
+		ServerName: "127.0.0.1",
+	}
+
+	runtime.GC()
+	mem := StartMemSampler(5 * time.Millisecond)
+	start := time.Now()
+
+	deviceStats := &WireStats{}
+	serverStats := &WireStats{}
+	brokerStats := map[string]*WireStats{}
+	var brokerStatsMu sync.Mutex
+
+	ln, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer ln.Close()
+
+	brokerErr := make(chan error, 1)
+	go func() {
+		defer ln.Close()
+		<-ctx.Done()
+	}()
+
+	broker := &mqttBroker{
+		ln:        ln,
+		subs:      map[string][]*mqttPeer{},
+		tlsConfig: serverTLS,
+		onConn: func(id string, stats *WireStats) {
+			brokerStatsMu.Lock()
+			defer brokerStatsMu.Unlock()
+			brokerStats[id] = stats
+		},
+	}
+	go func() { brokerErr <- broker.serve(ctx) }()
+
+	if ready != nil {
+		port := ln.Addr().(*net.TCPAddr).Port
+		ready([]uint16{uint16(port)}, nil)
+	}
+
+	// "BCI server" client: subscribes req -> publishes resp.
+	serverReady := make(chan struct{})
+	serverDone := make(chan error, 1)
+	go func() {
+		defer close(serverDone)
+		raw, err := net.DialTimeout("tcp", ln.Addr().String(), 2*time.Second)
+		if err != nil {
+			serverDone <- err
+			return
+		}
+		defer raw.Close()
+
+		counted := WrapConn(raw, serverStats)
+		tc := tls.Client(counted, clientTLS)
+		_ = tc.SetDeadline(time.Now().Add(5 * time.Second))
+		if err := tc.HandshakeContext(ctx); err != nil {
+			serverDone <- err
+			return
+		}
+		_ = tc.SetDeadline(time.Time{})
+
+		r := bufio.NewReader(tc)
+		if err := mqttConnect(tc, r, "server"); err != nil {
+			serverDone <- err
+			return
+		}
+		if err := mqttSubscribe(tc, r, 1, "bci/req"); err != nil {
+			serverDone <- err
+			return
+		}
+		close(serverReady)
+
+		for i := 0; i < cfg.Messages; i++ {
+			topic, payload, err := mqttReadPublish(r)
+			if err != nil {
+				serverDone <- err
+				return
+			}
+			if topic != "bci/req" {
+				serverDone <- fmt.Errorf("mqtt server: unexpected topic: %q", topic)
+				return
+			}
+			if err := mqttPublish(tc, "bci/resp", payload); err != nil {
+				serverDone <- err
+				return
+			}
+		}
+		serverDone <- nil
+	}()
+
+	// Device client: publishes req -> waits resp.
+	raw, err := net.DialTimeout("tcp", ln.Addr().String(), 2*time.Second)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer raw.Close()
+
+	counted := WrapConn(raw, deviceStats)
+	tc := tls.Client(counted, clientTLS)
+	_ = tc.SetDeadline(time.Now().Add(5 * time.Second))
+	if err := tc.HandshakeContext(ctx); err != nil {
+		return ProtocolResult{}, err
+	}
+	_ = tc.SetDeadline(time.Time{})
+
+	r := bufio.NewReader(tc)
+	if err := mqttConnect(tc, r, "device"); err != nil {
+		return ProtocolResult{}, err
+	}
+	if err := mqttSubscribe(tc, r, 1, "bci/resp"); err != nil {
+		return ProtocolResult{}, err
+	}
+
+	select {
+	case <-serverReady:
+	case <-ctx.Done():
+		return ProtocolResult{}, ctx.Err()
+	}
+
+	payload := make([]byte, cfg.PayloadSize)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+
+	rtts := make([]time.Duration, 0, cfg.Messages)
+	for i := 0; i < cfg.Messages; i++ {
+		select {
+		case <-ctx.Done():
+			return ProtocolResult{}, ctx.Err()
+		default:
+		}
+		t0 := time.Now()
+		if err := mqttPublish(tc, "bci/req", payload); err != nil {
+			return ProtocolResult{}, err
+		}
+		topic, resp, err := mqttReadPublish(r)
+		if err != nil {
+			return ProtocolResult{}, err
+		}
+		if topic != "bci/resp" {
+			return ProtocolResult{}, fmt.Errorf("mqtt device: unexpected topic: %q", topic)
+		}
+		if len(resp) != len(payload) {
+			return ProtocolResult{}, fmt.Errorf("mqtt echo length mismatch")
+		}
+		for j := range payload {
+			if resp[j] != payload[j] {
+				return ProtocolResult{}, fmt.Errorf("mqtt echo mismatch")
+			}
+		}
+		rtts = append(rtts, time.Since(t0))
+	}
+
+	if err := <-serverDone; err != nil {
+		return ProtocolResult{}, err
+	}
+	_ = ln.Close()
+	_ = raw.Close()
+
+	select {
+	case err := <-brokerErr:
+		if err != nil && ctx.Err() == nil {
+			// Ignore accept loop errors during shutdown.
+		}
+	default:
+	}
+
+	peak := mem.Stop()
+	dur := time.Since(start)
+
+	brokerStatsMu.Lock()
+	bsDevice := brokerStats["device"]
+	bsServer := brokerStats["server"]
+	brokerStatsMu.Unlock()
+	if bsDevice == nil || bsServer == nil {
+		return ProtocolResult{}, fmt.Errorf("mqtt broker stats missing (got device=%v server=%v)", bsDevice != nil, bsServer != nil)
+	}
+
+	wireBytes := deviceStats.BytesWritten.Load() + serverStats.BytesWritten.Load() + bsDevice.BytesWritten.Load() + bsServer.BytesWritten.Load()
+	payloadBytes := int64(cfg.Messages * cfg.PayloadSize * 2)
+
+	var freq [256]uint64
+	acc := func(s *WireStats) {
+		f := s.SnapshotWrittenFreq()
+		for i := 0; i < 256; i++ {
+			freq[i] += f[i]
+		}
+	}
+	acc(deviceStats)
+	acc(serverStats)
+	acc(bsDevice)
+	acc(bsServer)
+	stats := ComputeByteStats(freq)
+
+	avg := avgDuration(rtts)
+	p95 := percentileDuration(rtts, 0.95)
+
+	ws := summarizeWireMany(deviceStats, serverStats, bsDevice, bsServer)
+	durSec := dur.Seconds()
+	var payloadBps, wireBps float64
+	if durSec > 0 {
+		payloadBps = float64(payloadBytes) / durSec
+		wireBps = float64(wireBytes) / durSec
+	}
+
+	return ProtocolResult{
+		Name:                          "mqtt-3.1.1-qos0-tls",
+		Messages:                      cfg.Messages,
+		PayloadSize:                   cfg.PayloadSize,
+		PayloadBytesTotal:             payloadBytes,
+		WireBytesTotal:                wireBytes,
+		OverheadRatio:                 float64(wireBytes) / float64(payloadBytes),
+		AvgRTTMillis:                  float64(avg) / float64(time.Millisecond),
+		P95RTTMillis:                  float64(p95) / float64(time.Millisecond),
+		WireWriteCalls:                ws.writeCalls,
+		WireReadCalls:                 ws.readCalls,
+		WireWriteSizeBinsLog2:         ws.writeSizeBins,
+		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireActiveDurationMillis:      ws.activeDurationMillis,
+		WireEntropy:                   stats.Entropy,
+		WireASCIIRatio:                stats.ASCIIRatio,
+		PeakHeapAllocBytes:            peak.HeapAlloc,
+		PeakHeapInuseBytes:            peak.HeapInuse,
+		PeakSysBytes:                  peak.Sys,
+		PayloadThroughputBps:          payloadBps,
+		WireThroughputBps:             wireBps,
+		DurationMillis:                float64(dur) / float64(time.Millisecond),
+	}, nil
+}
+
 type mqttBroker struct {
 	ln net.Listener
 
@@ -243,6 +498,8 @@ type mqttBroker struct {
 	subs map[string][]*mqttPeer
 
 	onConn func(clientID string, stats *WireStats)
+
+	tlsConfig *tls.Config
 }
 
 type mqttPeer struct {
@@ -276,8 +533,18 @@ func (b *mqttBroker) handleConn(ctx context.Context, raw net.Conn) {
 	defer raw.Close()
 
 	stats := &WireStats{}
-	c := WrapConn(raw, stats)
-	r := bufio.NewReader(c)
+	counted := WrapConn(raw, stats)
+	conn := counted
+	if b.tlsConfig != nil {
+		tlsConn := tls.Server(counted, b.tlsConfig)
+		_ = tlsConn.SetDeadline(time.Now().Add(5 * time.Second))
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			return
+		}
+		_ = tlsConn.SetDeadline(time.Time{})
+		conn = tlsConn
+	}
+	r := bufio.NewReader(conn)
 
 	pt, _, body, err := mqttReadPacket(r)
 	if err != nil {
@@ -290,7 +557,7 @@ func (b *mqttBroker) handleConn(ctx context.Context, raw net.Conn) {
 	if err != nil {
 		return
 	}
-	p := &mqttPeer{id: id, conn: c, br: r, stats: stats}
+	p := &mqttPeer{id: id, conn: conn, br: r, stats: stats}
 	if b.onConn != nil {
 		b.onConn(id, stats)
 	}

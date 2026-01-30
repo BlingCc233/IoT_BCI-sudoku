@@ -10,8 +10,8 @@ This repo ships a reproducible comparison harness that can emit:
 
 Baselines:
 
-- DTLS
-- MQTT
+- DTLS (certificate/ECDHE)
+- MQTT over TLS
 - CoAP
 - Pure AEAD framing (no Sudoku appearance)
 
@@ -41,8 +41,8 @@ go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json
 - `iotbci-sudoku-pure`（纯数独下行）
 - `iotbci-sudoku-packed`（下行 6-bit packed 优化）
 - `pure-aead`（无数独外观层的 AEAD record，对比基线）
-- `dtls-psk-aes128gcm`
-- `mqtt-3.1.1-qos0`
+- `dtls-ecdhe-ecdsa-aes128gcm`
+- `mqtt-3.1.1-qos0-tls`
 - `coap-udp`
 
 注意：`iotbci-sudoku-*` 与 `pure-aead` 的 micro-bench 默认使用 `net.Pipe`（尽量隔离内核网络栈噪声），而 DTLS/MQTT/CoAP 需要真实 UDP/TCP socket，因此会包含更多 OS 网络栈开销。论文对比建议以 `cmd/iotbci-evidence` 的“真实回环流量”数据为主，以 `cmd/iotbci-bench` 的 micro-bench 作为补充。

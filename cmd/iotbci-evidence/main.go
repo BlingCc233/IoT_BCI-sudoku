@@ -145,9 +145,9 @@ func main() {
 			},
 		},
 		{
-			Name: "dtls-psk-aes128gcm",
+			Name: "dtls-ecdhe-ecdsa-aes128gcm",
 			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
-				return bench.RunDTLSOnUDP(ctx, cfg, "bench-psk-dtls", "127.0.0.1:0", ready)
+				return bench.RunDTLSCertECDHEOnUDP(ctx, cfg, "127.0.0.1:0", ready)
 			},
 		},
 		{
@@ -157,9 +157,9 @@ func main() {
 			},
 		},
 		{
-			Name: "mqtt-3.1.1-qos0",
+			Name: "mqtt-3.1.1-qos0-tls",
 			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
-				return bench.RunMQTTOnTCP(ctx, cfg, "127.0.0.1:0", ready)
+				return bench.RunMQTTOnTLS(ctx, cfg, "127.0.0.1:0", ready)
 			},
 		},
 	}

@@ -33,7 +33,7 @@ func RunAll(ctx context.Context, repoRoot string, cfg RunConfig) (Report, error)
 	}
 	results = append(results, r3)
 
-	r4, err := RunDTLS(ctx, cfg, "bench-psk-dtls")
+	r4, err := RunDTLSCertECDHE(ctx, cfg)
 	if err != nil {
 		return Report{}, err
 	}
