@@ -4,6 +4,8 @@ This repository implements a secure transport enhancement for BCI-IoT scenarios 
 
 Use this checklist to verify the “deliverables” described in the proposal PDF and the schedule PDF.
 
+Per-task “evidence packs” (Python-first validation + screenshots/copyable outputs for monthly reports): `evidence_steps/`.
+
 ## Protocol design & documentation
 
 - [x] Threat model (replay / MITM / resource abuse): `doc/SECURITY.md`
