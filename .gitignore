@@ -5,6 +5,8 @@ bin/
 *.pcap
 *.pcapng
 *.log
+*.pyc
+__pycache__/
 
 # Bench/evidence outputs (generated; force-add if you want to version them)
 bench*.json
