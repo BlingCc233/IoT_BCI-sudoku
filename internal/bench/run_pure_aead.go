@@ -1,7 +1,9 @@
 package bench
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"runtime"
 	"time"
 
@@ -76,6 +78,9 @@ func RunPureAEAD(ctx context.Context, cfg RunConfig, method iotbci.AEADMethod, p
 		}
 		if err := readFull(cConn, resp); err != nil {
 			return ProtocolResult{}, err
+		}
+		if !bytes.Equal(resp, payload) {
+			return ProtocolResult{}, fmt.Errorf("pure-aead echo mismatch")
 		}
 		rtts = append(rtts, time.Since(t0))
 	}

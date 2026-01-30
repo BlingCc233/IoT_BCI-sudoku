@@ -1,6 +1,7 @@
 package bench
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -118,6 +119,9 @@ func RunDTLSOnUDP(ctx context.Context, cfg RunConfig, psk, listenAddr string, re
 		_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
 		if err := readFull(c, resp); err != nil {
 			return ProtocolResult{}, err
+		}
+		if !bytes.Equal(resp, payload) {
+			return ProtocolResult{}, fmt.Errorf("dtls echo mismatch")
 		}
 		rtts = append(rtts, time.Since(t0))
 	}

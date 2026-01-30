@@ -1,10 +1,12 @@
 package bench
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"net"
 	"runtime"
 	"time"
@@ -180,6 +182,9 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 		}
 		if err := readFull(cConn, resp); err != nil {
 			return ProtocolResult{}, err
+		}
+		if !bytes.Equal(resp, payload) {
+			return ProtocolResult{}, fmt.Errorf("iotbci-sudoku echo mismatch")
 		}
 		rtts = append(rtts, time.Since(t0))
 	}
