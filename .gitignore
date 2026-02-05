@@ -15,6 +15,11 @@ evidence_out/
 report_out/
 evidence_tmp_run*/
 
+# Evidence steps generated artifacts
+evidence_steps/**/out/*.html
+evidence_steps/**/out/*.json
+evidence_steps/**/out/*.txt
+
 # Go
 *.test
 *.out
