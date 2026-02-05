@@ -84,8 +84,27 @@ func (s *WireStats) recordWrite(p []byte) {
 		s.WriteInterArrivalMsBins[bin].Add(1)
 	}
 
-	for _, b := range p {
-		s.ByteFreq[b].Add(1)
+	// Byte frequency: keep small writes fast (common in MQTT/TLS), but avoid per-byte atomics
+	// for large writes (common in Sudoku due to wire expansion).
+	if len(p) <= 512 {
+		for _, b := range p {
+			s.ByteFreq[b].Add(1)
+		}
+	} else {
+		var counts [256]uint32
+		var seen [256]byte
+		seenN := 0
+		for _, b := range p {
+			if counts[b] == 0 {
+				seen[seenN] = b
+				seenN++
+			}
+			counts[b]++
+		}
+		for i := 0; i < seenN; i++ {
+			b := seen[i]
+			s.ByteFreq[b].Add(uint64(counts[b]))
+		}
 	}
 
 	bin := log2Bin(len(p))

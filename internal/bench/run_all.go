@@ -15,13 +15,15 @@ func RunAll(ctx context.Context, repoRoot string, cfg RunConfig) (Report, error)
 
 	results := make([]ProtocolResult, 0, 8)
 
-	r1, err := RunIoTBCISudoku(ctx, cfg, true, 2, 7)
+	// Pure mode targets ASCII appearance; keep padding disabled by default to reduce latency/CPU for BCI workloads.
+	r1, err := RunIoTBCISudoku(ctx, cfg, true, 0, 0)
 	if err != nil {
 		return Report{}, err
 	}
 	results = append(results, r1)
 
-	r2, err := RunIoTBCISudoku(ctx, cfg, false, 2, 7)
+	// Packed mode is meant to showcase throughput; keep padding disabled here.
+	r2, err := RunIoTBCISudoku(ctx, cfg, false, 0, 0)
 	if err != nil {
 		return Report{}, err
 	}

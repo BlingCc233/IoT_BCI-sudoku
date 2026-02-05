@@ -97,6 +97,7 @@ func RunCoAPOnUDP(ctx context.Context, cfg RunConfig, listenAddr string, ready R
 		payload[i] = byte(i)
 	}
 
+	warmup := rttWarmupCount(cfg.Messages)
 	rtts := make([]time.Duration, 0, cfg.Messages)
 	buf := make([]byte, 64*1024)
 	var msgID uint16 = 1
@@ -150,7 +151,9 @@ func RunCoAPOnUDP(ctx context.Context, cfg RunConfig, listenAddr string, ready R
 			}
 		}
 
-		rtts = append(rtts, time.Since(t0))
+		if i >= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
 	}
 
 	if err := <-serverErr; err != nil {

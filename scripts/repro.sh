@@ -102,7 +102,11 @@ else
 fi
 
 echo "==> dashboard -> ${dashboard_dir}/index.html"
-go run ./cmd/iotbci-dashboard -bench "${bench_json}" -evidence "${evidence_dir}/evidence.json" "${attack_args[@]}" -out_dir "${dashboard_dir}"
+dashboard_cmd=(go run ./cmd/iotbci-dashboard -bench "${bench_json}" -evidence "${evidence_dir}/evidence.json" -out_dir "${dashboard_dir}")
+if [[ "${run_attack}" == "1" ]]; then
+  dashboard_cmd+=(-attack "${attack_json}")
+fi
+"${dashboard_cmd[@]}"
 
 if [[ "${run_tex}" == "1" ]]; then
   echo "==> LaTeX snippets -> ${tex_out}"

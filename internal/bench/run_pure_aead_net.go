@@ -92,6 +92,7 @@ func RunPureAEADOnTCP(ctx context.Context, cfg RunConfig, method iotbci.AEADMeth
 	resp := make([]byte, len(payload))
 
 	rtts := make([]time.Duration, 0, cfg.Messages)
+	warmup := rttWarmupCount(cfg.Messages)
 	for i := 0; i < cfg.Messages; i++ {
 		select {
 		case <-ctx.Done():
@@ -108,7 +109,9 @@ func RunPureAEADOnTCP(ctx context.Context, cfg RunConfig, method iotbci.AEADMeth
 		if !bytes.Equal(resp, payload) {
 			return ProtocolResult{}, fmt.Errorf("pure-aead echo mismatch")
 		}
-		rtts = append(rtts, time.Since(t0))
+		if i >= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
 	}
 	if err := <-serverErr; err != nil {
 		return ProtocolResult{}, err

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci"
+	"github.com/BlingCc233/IoT_BCI-sudoku/pkg/obfs/sudoku"
 )
 
 func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink bool, paddingMin, paddingMax int, listenAddr string, ready ReadyFunc) (ProtocolResult, error) {
@@ -21,23 +22,6 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 	if cfg.PayloadSize <= 0 {
 		cfg.PayloadSize = 256
 	}
-
-	runtime.GC()
-	mem := StartMemSampler(5 * time.Millisecond)
-	start := time.Now()
-
-	clientStats := &WireStats{}
-	serverStats := &WireStats{}
-
-	ln, err := net.Listen("tcp", listenAddr)
-	if err != nil {
-		return ProtocolResult{}, err
-	}
-	defer ln.Close()
-	go func() {
-		<-ctx.Done()
-		_ = ln.Close()
-	}()
 
 	// Identity & certs (master-signed).
 	masterPub, masterPriv, _ := ed25519.GenerateKey(rand.Reader)
@@ -59,11 +43,15 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 	psk := "bench-psk:" + hex8(sum[:])
 
 	asciiMode := "prefer_entropy"
-	customTables := []string{"xppppxvv", "vppxppvx"}
+	customTables := []string{"xppppxvv"}
 	if enablePureDownlink {
 		asciiMode = "prefer_ascii"
 		customTables = nil
 	}
+
+	// Prefer AES-GCM on platforms with hardware support; aligns with DTLS baseline cipher-suite.
+	hsAEAD := iotbci.AEADAES128GCM
+	sessAEAD := iotbci.AEADAES128GCM
 
 	serverOpts := &iotbci.ServerOptions{
 		Obfs: iotbci.ObfsOptions{
@@ -72,11 +60,12 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 			PaddingMin:         paddingMin,
 			PaddingMax:         paddingMax,
 			EnablePureDownlink: enablePureDownlink,
+			EnablePackedUplink: true,
 		},
 		Security: iotbci.SecurityOptions{
 			PSK:              psk,
-			HandshakeAEAD:    iotbci.AEADChaCha20Poly1305,
-			SessionAEAD:      iotbci.AEADChaCha20Poly1305,
+			HandshakeAEAD:    hsAEAD,
+			SessionAEAD:      sessAEAD,
 			HandshakeTimeout: 2 * time.Second,
 			TimeSkew:         2 * time.Minute,
 			MaxHandshakeSize: 8 * 1024,
@@ -97,11 +86,12 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 			PaddingMin:         paddingMin,
 			PaddingMax:         paddingMax,
 			EnablePureDownlink: enablePureDownlink,
+			EnablePackedUplink: true,
 		},
 		Security: iotbci.SecurityOptions{
 			PSK:              psk,
-			HandshakeAEAD:    iotbci.AEADChaCha20Poly1305,
-			SessionAEAD:      iotbci.AEADChaCha20Poly1305,
+			HandshakeAEAD:    hsAEAD,
+			SessionAEAD:      sessAEAD,
 			HandshakeTimeout: 2 * time.Second,
 			TimeSkew:         2 * time.Minute,
 			MaxHandshakeSize: 8 * 1024,
@@ -113,6 +103,27 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 		},
 	}
 
+	// Precompute shared Sudoku structures before measuring memory/latency.
+	sudoku.Precompute()
+
+	// Align with DTLS/MQTT baselines: generate key/cert material outside timed region.
+	runtime.GC()
+	mem := StartMemSampler(5 * time.Millisecond)
+	start := time.Now()
+
+	clientStats := &WireStats{}
+	serverStats := &WireStats{}
+
+	ln, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer ln.Close()
+	go func() {
+		<-ctx.Done()
+		_ = ln.Close()
+	}()
+
 	// Server handshake + echo loop.
 	serverErr := make(chan error, 1)
 	go func() {
@@ -122,6 +133,7 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 			return
 		}
 		defer raw.Close()
+		tuneLowLatencyTCPConn(raw)
 
 		sCount := WrapConn(raw, serverStats)
 		sConn, _, err := iotbci.ServerHandshake(ctx, sCount, serverOpts)
@@ -155,6 +167,7 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 		return ProtocolResult{}, err
 	}
 	defer rawClient.Close()
+	tuneLowLatencyTCPConn(rawClient)
 
 	cCount := WrapConn(rawClient, clientStats)
 	cConn, _, err := iotbci.ClientHandshake(ctx, cCount, clientOpts)
@@ -170,6 +183,7 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 	resp := make([]byte, len(payload))
 
 	rtts := make([]time.Duration, 0, cfg.Messages)
+	warmup := rttWarmupCount(cfg.Messages)
 	for i := 0; i < cfg.Messages; i++ {
 		select {
 		case <-ctx.Done():
@@ -186,7 +200,9 @@ func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink
 		if !bytes.Equal(resp, payload) {
 			return ProtocolResult{}, fmt.Errorf("iotbci-sudoku echo mismatch")
 		}
-		rtts = append(rtts, time.Since(t0))
+		if i >= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
 	}
 	if err := <-serverErr; err != nil {
 		return ProtocolResult{}, err

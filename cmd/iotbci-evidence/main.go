@@ -129,13 +129,15 @@ func main() {
 		{
 			Name: "iotbci-sudoku-pure-tcp",
 			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
-				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, true, 2, 7, "127.0.0.1:0", ready)
+				// Pure mode focuses on ASCII appearance; keep padding disabled to reduce latency/CPU for BCI workloads.
+				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, true, 0, 0, "127.0.0.1:0", ready)
 			},
 		},
 		{
 			Name: "iotbci-sudoku-packed-tcp",
 			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
-				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, false, 2, 7, "127.0.0.1:0", ready)
+				// Packed mode aims for throughput/latency; disable padding to avoid per-byte RNG overhead.
+				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, false, 0, 0, "127.0.0.1:0", ready)
 			},
 		},
 		{
