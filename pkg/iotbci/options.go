@@ -36,6 +36,12 @@ type ObfsOptions struct {
 	// EnablePureDownlink keeps downlink in pure Sudoku mode. If false, downlink uses
 	// 6-bit packing for better bandwidth utilization (AEAD recommended).
 	EnablePureDownlink bool
+
+	// EnablePackedUplink enables 6-bit packing on the uplink (client->server).
+	//
+	// When combined with EnablePureDownlink=false, both directions use PackedConn
+	// (maximum throughput / minimum CPU overhead).
+	EnablePackedUplink bool
 }
 
 type SecurityOptions struct {

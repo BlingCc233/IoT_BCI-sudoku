@@ -9,7 +9,8 @@
     "custom_tables": ["xppppxvv", "vppxppvx"],
     "padding_min": 2,
     "padding_max": 7,
-    "enable_pure_downlink": false
+    "enable_pure_downlink": false,
+    "enable_packed_uplink": true
   },
   "security": {
     "psk": "dev-psk-123",
@@ -27,4 +28,3 @@
     "local_cert": "AQAAAAAAAAABAAAAAGlzlQEAAAAAfD+ZLQAIc2VydmVyLTGFvLIXsY+tMtEiRnvSuMO1Kqddv6KCk+wJ0b9bSW8Y1tAjqLGvoKT04dmNQjcole9JEu8dMqUugLx8IOZ/tZq9CRQ6w+qbpxGXOusWUO8HKABEIvoyMiv/FiDTTPAeUAA="
   }
 }
-

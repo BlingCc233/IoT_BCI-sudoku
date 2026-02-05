@@ -12,6 +12,12 @@ const (
 	DownlinkModePacked byte = 0x02
 )
 
+type obfsUplinkConn interface {
+	net.Conn
+	StopRecording()
+	GetBufferedAndRecorded() []byte
+}
+
 type directionalConn struct {
 	net.Conn
 	reader  io.Reader
@@ -89,21 +95,57 @@ func downlinkModeByte(enablePure bool) byte {
 }
 
 func buildObfsConnForClient(raw net.Conn, table *sudoku.Table, obfs ObfsOptions) net.Conn {
-	uplinkSudoku := sudoku.NewConn(raw, table, obfs.PaddingMin, obfs.PaddingMax, false)
-	if obfs.EnablePureDownlink {
-		return uplinkSudoku
+	// Fast path: full packed is symmetrical, one wrapper is enough.
+	if obfs.EnablePackedUplink && !obfs.EnablePureDownlink {
+		return sudoku.NewPackedConn(raw, table, obfs.PaddingMin, obfs.PaddingMax)
 	}
+
+	var uplink io.Writer
+	if obfs.EnablePackedUplink {
+		uplink = sudoku.NewPackedConn(raw, table, obfs.PaddingMin, obfs.PaddingMax)
+	} else {
+		uplink = sudoku.NewConn(raw, table, obfs.PaddingMin, obfs.PaddingMax, false)
+	}
+
+	if obfs.EnablePureDownlink {
+		if !obfs.EnablePackedUplink {
+			// Symmetric pure mode.
+			return uplink.(net.Conn)
+		}
+		// Reader = pure sudoku (server->client), Writer = packed (client->server).
+		downlinkPure := sudoku.NewConn(raw, table, obfs.PaddingMin, obfs.PaddingMax, false)
+		return newDirectionalConn(raw, downlinkPure, uplink)
+	}
+
+	// Reader = packed (server->client), Writer = pure sudoku OR packed uplink.
 	downlinkPacked := sudoku.NewPackedConn(raw, table, obfs.PaddingMin, obfs.PaddingMax)
-	// Reader = downlinkPacked (server->client), Writer = uplinkSudoku (client->server).
-	return newDirectionalConn(raw, downlinkPacked, uplinkSudoku)
+	return newDirectionalConn(raw, downlinkPacked, uplink)
 }
 
-func buildObfsConnForServer(raw net.Conn, table *sudoku.Table, obfs ObfsOptions, record bool) (*sudoku.Conn, net.Conn) {
-	uplinkSudoku := sudoku.NewConn(raw, table, obfs.PaddingMin, obfs.PaddingMax, record)
-	if obfs.EnablePureDownlink {
-		return uplinkSudoku, uplinkSudoku
+func buildObfsConnForServer(raw net.Conn, table *sudoku.Table, obfs ObfsOptions, record bool) (obfsUplinkConn, net.Conn) {
+	var uplink obfsUplinkConn
+	if obfs.EnablePackedUplink {
+		uplink = sudoku.NewPackedConnWithRecord(raw, table, obfs.PaddingMin, obfs.PaddingMax, record)
+	} else {
+		uplink = sudoku.NewConn(raw, table, obfs.PaddingMin, obfs.PaddingMax, record)
 	}
+
+	// Full packed is symmetrical: reuse one wrapper for both directions.
+	if obfs.EnablePackedUplink && !obfs.EnablePureDownlink {
+		return uplink, uplink
+	}
+
+	if obfs.EnablePureDownlink {
+		if !obfs.EnablePackedUplink {
+			// Symmetric pure mode.
+			return uplink, uplink
+		}
+		// Reader = packed uplink (client->server), Writer = pure sudoku (server->client).
+		downlinkPure := sudoku.NewConn(raw, table, obfs.PaddingMin, obfs.PaddingMax, false)
+		return uplink, newDirectionalConn(raw, uplink, downlinkPure)
+	}
+
+	// Reader = pure sudoku OR packed uplink (client->server), Writer = packed (server->client).
 	downlinkPacked := sudoku.NewPackedConn(raw, table, obfs.PaddingMin, obfs.PaddingMax)
-	// Reader = uplinkSudoku (client->server), Writer = downlinkPacked (server->client).
-	return uplinkSudoku, newDirectionalConn(raw, uplinkSudoku, downlinkPacked, downlinkPacked.Flush)
+	return uplink, newDirectionalConn(raw, uplink, downlinkPacked)
 }

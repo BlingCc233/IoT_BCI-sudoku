@@ -38,8 +38,8 @@ go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json
 
 当前 bench 默认包含：
 
-- `iotbci-sudoku-pure`（纯数独下行）
-- `iotbci-sudoku-packed`（下行 6-bit packed 优化）
+- `iotbci-sudoku-pure`（纯数独：ASCII 外观优先；默认关闭 padding 以降低延迟/CPU，展示吞吐/时延上限）
+- `iotbci-sudoku-packed`（双向 6-bit packed：启用 `EnablePackedUplink`；默认关闭 padding 以展示吞吐/时延上限）
 - `pure-aead`（无数独外观层的 AEAD record，对比基线）
 - `dtls-ecdhe-ecdsa-aes128gcm`
 - `mqtt-3.1.1-qos0-tls`

@@ -44,7 +44,7 @@ func idToAEAD(id uint16) (AEADMethod, error) {
 	}
 }
 
-func encodeFlags(sessionAEAD AEADMethod, enablePureDownlink bool) (uint16, error) {
+func encodeFlags(sessionAEAD AEADMethod, enablePureDownlink bool, enablePackedUplink bool) (uint16, error) {
 	aeadID, err := aeadToID(sessionAEAD)
 	if err != nil {
 		return 0, err
@@ -54,17 +54,21 @@ func encodeFlags(sessionAEAD AEADMethod, enablePureDownlink bool) (uint16, error
 	if enablePureDownlink {
 		flags |= 1 << 2
 	}
+	if enablePackedUplink {
+		flags |= 1 << 3
+	}
 	return flags, nil
 }
 
-func decodeFlags(flags uint16) (AEADMethod, bool, error) {
+func decodeFlags(flags uint16) (AEADMethod, bool, bool, error) {
 	aeadID := flags & 0x0003
 	aead, err := idToAEAD(aeadID)
 	if err != nil {
-		return "", false, err
+		return "", false, false, err
 	}
 	enablePureDownlink := (flags & (1 << 2)) != 0
-	return aead, enablePureDownlink, nil
+	enablePackedUplink := (flags & (1 << 3)) != 0
+	return aead, enablePureDownlink, enablePackedUplink, nil
 }
 
 // userHashFromPrivateKey preserves the legacy "private-key-hash user matching" property:

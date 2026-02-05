@@ -4,6 +4,7 @@ This layer provides:
 
 - 1 byte plaintext -> 4 hint bytes (order permuted)
 - Arbitrary padding bytes inserted between hints
+- Optional packed mode: 6-bit groups -> 1 hint byte (+ pad marker), for throughput-first profiles
 - ASCII preference or entropy preference
 - Custom x/v/p bit-layout table (semantic corrected):
   - `x`: redundant bits (2 bits)
@@ -11,6 +12,16 @@ This layer provides:
   - `v`: value bits (2 bits)
 
 Implementation: `pkg/obfs/sudoku`.
+
+## Packed 模式（6-bit groups）
+
+除了 “1 byte -> 4 hints” 的纯数独编解码外，本仓库还提供 `PackedConn`（`pkg/obfs/sudoku/packed.go`）：
+
+- 写入路径：按 6-bit 分组，将每组编码为 1 个 hint byte（更接近 base64 风格，但仍受 layout.isHint/自定义 x/v/p 外观控制）
+- 读出路径：跳过 padding，按组还原回字节流
+- 适合与 AEAD ciphertext 叠加，用于吞吐/时延优先的 profile
+
+在 `pkg/iotbci` 中可通过 `ObfsOptions.EnablePackedUplink` 打开 uplink（client->server）打包；与 `EnablePureDownlink=false` 组合时即为双向 packed。
 
 ## 自定义 x/v/p 外观（语义纠错说明）
 

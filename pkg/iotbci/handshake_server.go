@@ -114,11 +114,13 @@ func ServerHandshake(ctx context.Context, rawConn net.Conn, opts *ServerOptions)
 		return nil, nil, &SuspiciousError{Err: ErrTimeSkew, Conn: uplinkSudoku}
 	}
 
-	peerAEAD, peerPureDownlink, err := decodeFlags(cHello.Flags)
+	peerAEAD, peerPureDownlink, peerPackedUplink, err := decodeFlags(cHello.Flags)
 	if err != nil {
 		return nil, nil, &SuspiciousError{Err: err, Conn: uplinkSudoku}
 	}
-	if peerAEAD != opts.Security.SessionAEAD || peerPureDownlink != opts.Obfs.EnablePureDownlink {
+	if peerAEAD != opts.Security.SessionAEAD ||
+		peerPureDownlink != opts.Obfs.EnablePureDownlink ||
+		peerPackedUplink != opts.Obfs.EnablePackedUplink {
 		return nil, nil, &SuspiciousError{Err: fmt.Errorf("%w: option mismatch", ErrProtocolViolation), Conn: uplinkSudoku}
 	}
 
@@ -142,7 +144,7 @@ func ServerHandshake(ctx context.Context, rawConn net.Conn, opts *ServerOptions)
 	}
 
 	// Server response.
-	flags, err := encodeFlags(opts.Security.SessionAEAD, opts.Obfs.EnablePureDownlink)
+	flags, err := encodeFlags(opts.Security.SessionAEAD, opts.Obfs.EnablePureDownlink, opts.Obfs.EnablePackedUplink)
 	if err != nil {
 		return nil, nil, &SuspiciousError{Err: err, Conn: uplinkSudoku}
 	}

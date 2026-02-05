@@ -86,7 +86,7 @@ func ClientHandshake(ctx context.Context, rawConn net.Conn, opts *ClientOptions)
 	default:
 	}
 
-	flags, err := encodeFlags(opts.Security.SessionAEAD, opts.Obfs.EnablePureDownlink)
+	flags, err := encodeFlags(opts.Security.SessionAEAD, opts.Obfs.EnablePureDownlink, opts.Obfs.EnablePackedUplink)
 	if err != nil {
 		_ = rawConn.Close()
 		return nil, nil, err
@@ -173,12 +173,14 @@ func ClientHandshake(ctx context.Context, rawConn net.Conn, opts *ClientOptions)
 		return nil, nil, fmt.Errorf("%w: server signature mismatch", ErrAuthFailed)
 	}
 
-	peerAEAD, peerPureDownlink, err := decodeFlags(sHello.Flags)
+	peerAEAD, peerPureDownlink, peerPackedUplink, err := decodeFlags(sHello.Flags)
 	if err != nil {
 		_ = rawConn.Close()
 		return nil, nil, err
 	}
-	if peerAEAD != opts.Security.SessionAEAD || peerPureDownlink != opts.Obfs.EnablePureDownlink {
+	if peerAEAD != opts.Security.SessionAEAD ||
+		peerPureDownlink != opts.Obfs.EnablePureDownlink ||
+		peerPackedUplink != opts.Obfs.EnablePackedUplink {
 		_ = rawConn.Close()
 		return nil, nil, fmt.Errorf("%w: option mismatch", ErrProtocolViolation)
 	}

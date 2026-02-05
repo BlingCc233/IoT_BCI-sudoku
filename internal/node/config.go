@@ -38,6 +38,7 @@ type ObfsConfig struct {
 	PaddingMin         int      `json:"padding_min"`
 	PaddingMax         int      `json:"padding_max"`
 	EnablePureDownlink bool     `json:"enable_pure_downlink"`
+	EnablePackedUplink bool     `json:"enable_packed_uplink"`
 }
 
 type SecurityConfig struct {
@@ -119,6 +120,7 @@ func (c *Config) ToServerOptions() (*iotbci.ServerOptions, error) {
 			PaddingMin:         c.Obfs.PaddingMin,
 			PaddingMax:         c.Obfs.PaddingMax,
 			EnablePureDownlink: c.Obfs.EnablePureDownlink,
+			EnablePackedUplink: c.Obfs.EnablePackedUplink,
 		},
 		Security: sec,
 		Identity: identity,
@@ -153,6 +155,7 @@ func (c *Config) ToClientOptions() (*iotbci.ClientOptions, error) {
 			PaddingMin:         c.Obfs.PaddingMin,
 			PaddingMax:         c.Obfs.PaddingMax,
 			EnablePureDownlink: c.Obfs.EnablePureDownlink,
+			EnablePackedUplink: c.Obfs.EnablePackedUplink,
 		},
 		Security: sec,
 		Identity: identity,

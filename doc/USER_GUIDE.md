@@ -285,6 +285,9 @@ go run ./cmd/iotbci-report -in capture.pcap -out_dir report_out -tcp_ports 9000
 - `enable_pure_downlink`：
   - `true`：下行也用纯数独外观（更一致但更费带宽）
   - `false`：下行使用 6-bit packed（更省带宽，推荐配合 AEAD）
+- `enable_packed_uplink`：
+  - `true`：上行（client->server）也使用 6-bit packed
+  - 与 `enable_pure_downlink=false` 组合时即为“双向 packed”（吞吐/时延优先）
 
 ### 5.3 `security`（握手/会话安全）
 
@@ -484,7 +487,7 @@ go tool cover -html=cover.out -o cover.html
 
 优先检查：
 
-- client/server 的 `psk`、`handshake_aead`、`session_aead`、`enable_pure_downlink` 是否一致（否则会触发 option mismatch）
+- client/server 的 `psk`、`handshake_aead`、`session_aead`、`enable_pure_downlink`、`enable_packed_uplink` 是否一致（否则会触发 option mismatch）
 - `time_skew_sec` 是否过小（设备时间未同步时常见）
 - 证书是否过期（`not_before/not_after`）
 - `local_private_key_hex` 是否与 `local_cert` 匹配
