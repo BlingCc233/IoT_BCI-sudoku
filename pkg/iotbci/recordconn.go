@@ -1,7 +1,6 @@
 package iotbci
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
@@ -31,9 +30,10 @@ type recordConn struct {
 	txSeq uint64
 	rxSeq uint64
 
-	writeMu sync.Mutex
-	readMu  sync.Mutex
-	readBuf bytes.Buffer
+	writeMu    sync.Mutex
+	readMu     sync.Mutex
+	pending    []byte
+	pendingOff int
 
 	writeBuf    []byte
 	rxCipherBuf []byte
@@ -132,7 +132,6 @@ func (c *recordConn) Write(p []byte) (int, error) {
 	defer c.writeMu.Unlock()
 
 	total := 0
-	var header [2]byte
 
 	for len(p) > 0 {
 		chunk := p
@@ -140,26 +139,26 @@ func (c *recordConn) Write(p []byte) (int, error) {
 			chunk = p[:maxPlain]
 		}
 
-		needCipherCap := len(chunk) + overhead
-		if cap(c.writeBuf) < needCipherCap {
-			c.writeBuf = make([]byte, 0, needCipherCap)
+		needCap := 2 + len(chunk) + overhead
+		if cap(c.writeBuf) < needCap {
+			c.writeBuf = make([]byte, 0, needCap)
 		}
 
 		nonce := c.makeNonce(&c.txNonceBuf, c.txSalt, c.txSeq)
-		ciphertext := c.aeadTx.Seal(c.writeBuf[:0], nonce, chunk, nil)
+		out := c.writeBuf[:0]
+		out = append(out, 0, 0) // 2-byte length prefix placeholder
+		out = c.aeadTx.Seal(out, nonce, chunk, nil)
 		c.txSeq++
 
-		if len(ciphertext) > int(^uint16(0)) {
-			return total, fmt.Errorf("ciphertext too large: %d", len(ciphertext))
+		cipherLen := len(out) - 2
+		if cipherLen <= 0 || cipherLen > int(^uint16(0)) {
+			return total, fmt.Errorf("ciphertext too large: %d", cipherLen)
 		}
-		binary.BigEndian.PutUint16(header[:], uint16(len(ciphertext)))
-		if err := writeFull(c.Conn, header[:]); err != nil {
+		binary.BigEndian.PutUint16(out[:2], uint16(cipherLen))
+		if err := writeFull(c.Conn, out); err != nil {
 			return total, err
 		}
-		if err := writeFull(c.Conn, ciphertext); err != nil {
-			return total, err
-		}
-		c.writeBuf = ciphertext[:0]
+		c.writeBuf = out[:0]
 
 		total += len(chunk)
 		p = p[len(chunk):]
@@ -178,9 +177,17 @@ func (c *recordConn) Read(p []byte) (int, error) {
 	c.readMu.Lock()
 	defer c.readMu.Unlock()
 
-	if c.readBuf.Len() > 0 {
-		return c.readBuf.Read(p)
+	if c.pendingOff < len(c.pending) {
+		n := copy(p, c.pending[c.pendingOff:])
+		c.pendingOff += n
+		if c.pendingOff >= len(c.pending) {
+			c.pending = nil
+			c.pendingOff = 0
+		}
+		return n, nil
 	}
+	c.pending = nil
+	c.pendingOff = 0
 
 	var header [2]byte
 	if _, err := io.ReadFull(c.Conn, header[:]); err != nil {
@@ -209,8 +216,15 @@ func (c *recordConn) Read(p []byte) (int, error) {
 	}
 	c.rxSeq++
 
-	c.readBuf.Write(plaintext)
-	return c.readBuf.Read(p)
+	if len(plaintext) <= len(p) {
+		copy(p, plaintext)
+		return len(plaintext), nil
+	}
+
+	nn := copy(p, plaintext)
+	c.pending = plaintext
+	c.pendingOff = nn
+	return nn, nil
 }
 
 func writeFull(w io.Writer, b []byte) error {
