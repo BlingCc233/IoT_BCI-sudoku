@@ -15,17 +15,15 @@ type byteLayout struct {
 	padMarker   byte
 	paddingPool []byte
 
+	hintOK [256]bool
+
 	encodeHint  func(value2b, pos4b byte) byte
 	encodeGroup func(group6b byte) byte
 	decodeGroup func(b byte) (byte, bool)
 }
 
 func (l *byteLayout) isHint(b byte) bool {
-	if (b & l.hintMask) == l.hintValue {
-		return true
-	}
-	// In prefer_ascii mode we also accept '\n' as an on-wire alias for 0x7F.
-	return l.isASCII && b == '\n'
+	return l.hintOK[b]
 }
 
 func resolveLayout(mode string, customPattern string) (*byteLayout, error) {
@@ -49,7 +47,7 @@ func newASCIILayout() *byteLayout {
 	for i := 0; i < 32; i++ {
 		padding = append(padding, byte(0x20+i))
 	}
-	return &byteLayout{
+	l := &byteLayout{
 		name:        "ascii",
 		isASCII:     true,
 		hintMask:    0x40,
@@ -57,18 +55,10 @@ func newASCIILayout() *byteLayout {
 		padMarker:   0x3F,
 		paddingPool: padding,
 		encodeHint: func(value2b, pos4b byte) byte {
-			b := 0x40 | ((value2b & 0x03) << 4) | (pos4b & 0x0F)
-			if b == 0x7F {
-				return '\n'
-			}
-			return b
+			return 0x40 | ((value2b & 0x03) << 4) | (pos4b & 0x0F)
 		},
 		encodeGroup: func(group6b byte) byte {
-			b := 0x40 | (group6b & 0x3F)
-			if b == 0x7F {
-				return '\n'
-			}
-			return b
+			return 0x40 | (group6b & 0x3F)
 		},
 		decodeGroup: func(b byte) (byte, bool) {
 			if b == '\n' {
@@ -80,6 +70,13 @@ func newASCIILayout() *byteLayout {
 			return b & 0x3F, true
 		},
 	}
+	for i := 0; i < 256; i++ {
+		b := byte(i)
+		l.hintOK[b] = (b & l.hintMask) == l.hintValue
+	}
+	// In prefer_ascii mode we also accept '\n' as an on-wire alias for 0x7F.
+	l.hintOK['\n'] = true
+	return l
 }
 
 func newEntropyLayout() *byteLayout {
@@ -88,7 +85,7 @@ func newEntropyLayout() *byteLayout {
 		padding = append(padding, byte(0x80+i))
 		padding = append(padding, byte(0x10+i))
 	}
-	return &byteLayout{
+	l := &byteLayout{
 		name:        "entropy",
 		isASCII:     false,
 		hintMask:    0x90,
@@ -109,6 +106,11 @@ func newEntropyLayout() *byteLayout {
 			return ((b >> 1) & 0x30) | (b & 0x0F), true
 		},
 	}
+	for i := 0; i < 256; i++ {
+		b := byte(i)
+		l.hintOK[b] = (b & l.hintMask) == l.hintValue
+	}
+	return l
 }
 
 // newCustomLayout builds a custom bit-layout for the x/v/p appearance.
@@ -151,44 +153,72 @@ func newCustomLayout(pattern string) (*byteLayout, error) {
 		xMask |= 1 << b
 	}
 
-	encodeBits := func(value2b, pos4b byte, dropX int) byte {
+	var posBitsLUT [16]byte
+	for pos := 0; pos < 16; pos++ {
 		var out byte
-		out |= xMask
-		if dropX >= 0 {
-			out &^= 1 << xBits[dropX]
-		}
+		p := byte(pos)
 		for i, bit := range pBits {
-			if (pos4b>>(3-uint8(i)))&0x01 == 1 {
+			if (p>>(3-uint8(i)))&0x01 == 1 {
 				out |= 1 << bit
 			}
 		}
-		if (value2b & 0x02) != 0 {
+		posBitsLUT[pos] = out
+	}
+	var valueBitsLUT [4]byte
+	for value := 0; value < 4; value++ {
+		var out byte
+		v := byte(value)
+		if (v & 0x02) != 0 {
 			out |= 1 << vBits[0]
 		}
-		if (value2b & 0x01) != 0 {
+		if (v & 0x01) != 0 {
 			out |= 1 << vBits[1]
+		}
+		valueBitsLUT[value] = out
+	}
+
+	encodeBits := func(value2b, pos4b byte, dropX int) byte {
+		out := xMask | posBitsLUT[pos4b&0x0F] | valueBitsLUT[value2b&0x03]
+		if dropX >= 0 {
+			out &^= 1 << xBits[dropX]
 		}
 		return out
 	}
 
-	decodeGroup := func(b byte) (byte, bool) {
-		if (b & xMask) != xMask {
-			return 0, false
+	var encodeHintLUT [64]byte
+	for value2b := 0; value2b < 4; value2b++ {
+		for pos4b := 0; pos4b < 16; pos4b++ {
+			encodeHintLUT[(value2b<<4)|pos4b] = encodeBits(byte(value2b), byte(pos4b), -1)
+		}
+	}
+	var encodeGroupLUT [64]byte
+	for g := 0; g < 64; g++ {
+		value2b := byte((g >> 4) & 0x03)
+		pos4b := byte(g & 0x0F)
+		encodeGroupLUT[g] = encodeBits(value2b, pos4b, -1)
+	}
+	var decodeGroupLUT [256]byte
+	var decodeGroupOK [256]bool
+	for b := 0; b < 256; b++ {
+		bb := byte(b)
+		if (bb & xMask) != xMask {
+			continue
 		}
 		var value2b, pos4b byte
 		for i, bit := range pBits {
-			if b&(1<<bit) != 0 {
+			if bb&(1<<bit) != 0 {
 				pos4b |= 1 << (3 - uint8(i))
 			}
 		}
-		if b&(1<<vBits[0]) != 0 {
+		if bb&(1<<vBits[0]) != 0 {
 			value2b |= 0x02
 		}
-		if b&(1<<vBits[1]) != 0 {
+		if bb&(1<<vBits[1]) != 0 {
 			value2b |= 0x01
 		}
 		group := (value2b << 4) | (pos4b & 0x0F)
-		return group, true
+		decodeGroupLUT[b] = group
+		decodeGroupOK[b] = true
 	}
 
 	// Build a padding pool by dropping one redundant x-bit so padding bytes are never hints.
@@ -220,14 +250,18 @@ func newCustomLayout(pattern string) (*byteLayout, error) {
 		hintValue:   xMask,
 		padMarker:   padding[0],
 		paddingPool: padding,
+		hintOK:      decodeGroupOK,
 		encodeHint: func(value2b, pos4b byte) byte {
-			return encodeBits(value2b, pos4b, -1)
+			return encodeHintLUT[((value2b&0x03)<<4)|(pos4b&0x0F)]
 		},
 		encodeGroup: func(group6b byte) byte {
-			value2b := (group6b >> 4) & 0x03
-			pos4b := group6b & 0x0F
-			return encodeBits(value2b, pos4b, -1)
+			return encodeGroupLUT[group6b&0x3F]
 		},
-		decodeGroup: decodeGroup,
+		decodeGroup: func(b byte) (byte, bool) {
+			if !decodeGroupOK[b] {
+				return 0, false
+			}
+			return decodeGroupLUT[b], true
+		},
 	}, nil
 }

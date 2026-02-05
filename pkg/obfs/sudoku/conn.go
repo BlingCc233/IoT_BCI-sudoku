@@ -10,33 +10,6 @@ import (
 
 const IOBufferSize = 32 * 1024
 
-var perm4 = [24][4]byte{
-	{0, 1, 2, 3},
-	{0, 1, 3, 2},
-	{0, 2, 1, 3},
-	{0, 2, 3, 1},
-	{0, 3, 1, 2},
-	{0, 3, 2, 1},
-	{1, 0, 2, 3},
-	{1, 0, 3, 2},
-	{1, 2, 0, 3},
-	{1, 2, 3, 0},
-	{1, 3, 0, 2},
-	{1, 3, 2, 0},
-	{2, 0, 1, 3},
-	{2, 0, 3, 1},
-	{2, 1, 0, 3},
-	{2, 1, 3, 0},
-	{2, 3, 0, 1},
-	{2, 3, 1, 0},
-	{3, 0, 1, 2},
-	{3, 0, 2, 1},
-	{3, 1, 0, 2},
-	{3, 1, 2, 0},
-	{3, 2, 0, 1},
-	{3, 2, 1, 0},
-}
-
 type Conn struct {
 	net.Conn
 	table  *Table
@@ -78,17 +51,17 @@ func NewConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int, record 
 	}()
 
 	sc := &Conn{
-		Conn:        c,
-		table:       table,
-		reader:      bufio.NewReaderSize(c, IOBufferSize),
-		rawBuf:      make([]byte, IOBufferSize),
-		pendingData: make([]byte, 0, 4096),
-		rng:         localRng,
-		paddingRate: rate,
+		Conn:         c,
+		table:        table,
+		reader:       bufio.NewReaderSize(c, IOBufferSize),
+		rawBuf:       make([]byte, IOBufferSize),
+		pendingData:  make([]byte, 0, IOBufferSize/4),
+		rng:          localRng,
+		paddingRate:  rate,
 		padThreshold: threshold,
 		padPool:      table.PaddingPool,
 		padLen:       len(table.PaddingPool),
-		writeBuf:    make([]byte, 0, 4096),
+		writeBuf:     make([]byte, 0, 4096),
 	}
 	if record {
 		sc.recorder = new(bytes.Buffer)
@@ -156,12 +129,6 @@ func (sc *Conn) Write(p []byte) (int, error) {
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()
 
-	needed := len(p)*6 + 16
-	if cap(sc.writeBuf) < needed {
-		sc.writeBuf = make([]byte, 0, needed)
-	}
-	out := sc.writeBuf[:0]
-
 	pads := sc.padPool
 	padLen := sc.padLen
 	rng := &sc.rng
@@ -169,24 +136,62 @@ func (sc *Conn) Write(p []byte) (int, error) {
 	encodeTable := &sc.table.EncodeTable
 	hasPadding := padThreshold != 0 && padLen > 0
 
+	needed := len(p)*4 + 16
+	if hasPadding {
+		needed = len(p)*6 + 16
+	}
+	if cap(sc.writeBuf) < needed {
+		sc.writeBuf = make([]byte, 0, needed)
+	}
+	out := sc.writeBuf[:0]
+
+	if !hasPadding {
+		outLen := len(p) * 4
+		out = sc.writeBuf[:outLen]
+		oi := 0
+		puzzleIdx := rng.Uint32() & 7
+		for _, b := range p {
+			puzzles := (*encodeTable)[b]
+			puzzle := puzzles[int(puzzleIdx)]
+			puzzleIdx = (puzzleIdx + 1) & 7
+			out[oi] = puzzle[0]
+			out[oi+1] = puzzle[1]
+			out[oi+2] = puzzle[2]
+			out[oi+3] = puzzle[3]
+			oi += 4
+		}
+		_, err := sc.Conn.Write(out)
+		sc.writeBuf = out[:0]
+		return len(p), err
+	}
+
 	for _, b := range p {
-		if hasPadding && rng.Uint32() <= padThreshold {
+		if rng.Uint32() <= padThreshold {
 			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
 		}
 
 		puzzles := (*encodeTable)[b]
-		puzzle := puzzles[int(uint64(rng.Uint32())*uint64(len(puzzles))>>32)]
-		perm := perm4[int(uint64(rng.Uint32())*uint64(len(perm4))>>32)]
+		puzzle := puzzles[int(rng.Uint32()&7)]
 
-		for _, idx := range perm {
-			if hasPadding && rng.Uint32() <= padThreshold {
-				out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
-			}
-			out = append(out, puzzle[idx])
+		if rng.Uint32() <= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
 		}
+		out = append(out, puzzle[0])
+		if rng.Uint32() <= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
+		}
+		out = append(out, puzzle[1])
+		if rng.Uint32() <= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
+		}
+		out = append(out, puzzle[2])
+		if rng.Uint32() <= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
+		}
+		out = append(out, puzzle[3])
 	}
 
-	if hasPadding && rng.Uint32() <= padThreshold {
+	if rng.Uint32() <= padThreshold {
 		out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)>>32)])
 	}
 
@@ -206,8 +211,10 @@ func (sc *Conn) Read(p []byte) (int, error) {
 		return n, nil
 	}
 
+	hasPadding := sc.padThreshold != 0 && sc.padLen > 0
+
 	for {
-		if len(sc.pendingData) > 0 {
+		if len(sc.pendingData) >= len(p) {
 			break
 		}
 
@@ -220,22 +227,81 @@ func (sc *Conn) Read(p []byte) (int, error) {
 			}
 			sc.recordLock.Unlock()
 
-			layout := sc.table.layout
-			for _, b := range chunk {
-				if !layout.isHint(b) {
-					continue
+			if !hasPadding {
+				// Fast path: in no-padding mode, every wire byte is a hint and every 4 hints decode to 1 byte.
+				need := (nr+sc.hintCount)/4 + 16
+				if cap(sc.pendingData)-len(sc.pendingData) < need {
+					newCap := len(sc.pendingData) + need
+					buf := make([]byte, len(sc.pendingData), newCap)
+					copy(buf, sc.pendingData)
+					sc.pendingData = buf
 				}
 
-				sc.hintBuf[sc.hintCount] = b
-				sc.hintCount++
-				if sc.hintCount == 4 {
-					key := packHintsToKey4(sc.hintBuf[0], sc.hintBuf[1], sc.hintBuf[2], sc.hintBuf[3])
-					val, ok := sc.table.DecodeMap[key]
-					if !ok {
-						return 0, ErrInvalidSudokuMapMiss
+				i := 0
+				if sc.hintCount != 0 {
+					for sc.hintCount < 4 && i < len(chunk) {
+						sc.hintBuf[sc.hintCount] = chunk[i]
+						sc.hintCount++
+						i++
 					}
-					sc.pendingData = append(sc.pendingData, val)
-					sc.hintCount = 0
+					if sc.hintCount == 4 {
+						key := uint32(sc.hintBuf[0])<<24 | uint32(sc.hintBuf[1])<<16 | uint32(sc.hintBuf[2])<<8 | uint32(sc.hintBuf[3])
+						val, ok := sc.table.Decode(key)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						sc.pendingData = append(sc.pendingData, val)
+						sc.hintCount = 0
+					}
+				}
+
+				rem := chunk[i:]
+				full := len(rem) &^ 3
+				decoded := full / 4
+				if decoded > 0 {
+					start := len(sc.pendingData)
+					sc.pendingData = sc.pendingData[:start+decoded]
+					di := start
+					for j := 0; j < full; j += 4 {
+						key := uint32(rem[j])<<24 | uint32(rem[j+1])<<16 | uint32(rem[j+2])<<8 | uint32(rem[j+3])
+						val, ok := sc.table.Decode(key)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						sc.pendingData[di] = val
+						di++
+					}
+				}
+
+				tail := rem[full:]
+				copy(sc.hintBuf[:], tail)
+				sc.hintCount = len(tail)
+			} else {
+				// Conservative: worst-case all bytes are hints -> 4 hints per decoded byte.
+				if cap(sc.pendingData)-len(sc.pendingData) < (nr/4)+16 {
+					newCap := len(sc.pendingData) + (nr / 4) + 16
+					buf := make([]byte, len(sc.pendingData), newCap)
+					copy(buf, sc.pendingData)
+					sc.pendingData = buf
+				}
+
+				layout := sc.table.layout
+				for _, b := range chunk {
+					if !layout.isHint(b) {
+						continue
+					}
+
+					sc.hintBuf[sc.hintCount] = b
+					sc.hintCount++
+					if sc.hintCount == 4 {
+						key := uint32(sc.hintBuf[0])<<24 | uint32(sc.hintBuf[1])<<16 | uint32(sc.hintBuf[2])<<8 | uint32(sc.hintBuf[3])
+						val, ok := sc.table.Decode(key)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						sc.pendingData = append(sc.pendingData, val)
+						sc.hintCount = 0
+					}
 				}
 			}
 		}
@@ -245,7 +311,7 @@ func (sc *Conn) Read(p []byte) (int, error) {
 			}
 			return 0, rErr
 		}
-		if len(sc.pendingData) > 0 {
+		if len(sc.pendingData) >= len(p) {
 			break
 		}
 	}

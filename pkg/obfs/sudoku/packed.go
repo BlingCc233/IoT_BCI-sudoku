@@ -2,6 +2,7 @@ package sudoku
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 	"net"
 	"sync"
@@ -13,6 +14,10 @@ type PackedConn struct {
 	net.Conn
 	table  *Table
 	reader *bufio.Reader
+
+	recorder   *bytes.Buffer
+	recording  bool
+	recordLock sync.Mutex
 
 	rawBuf      []byte
 	pendingData []byte
@@ -33,6 +38,10 @@ type PackedConn struct {
 }
 
 func NewPackedConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int) *PackedConn {
+	return NewPackedConnWithRecord(c, table, paddingMinPct, paddingMaxPct, false)
+}
+
+func NewPackedConnWithRecord(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int, record bool) *PackedConn {
 	localRng := newFastRNG()
 
 	min := float32(paddingMinPct) / 100.0
@@ -58,6 +67,10 @@ func NewPackedConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int) *
 			return uint32(float64(rate) * 4294967295.0)
 		}(),
 	}
+	if record {
+		pc.recorder = new(bytes.Buffer)
+		pc.recording = true
+	}
 
 	pc.padMarker = table.layout.padMarker
 	for _, b := range table.PaddingPool {
@@ -75,10 +88,16 @@ func (pc *PackedConn) CloseWrite() error {
 	if pc == nil || pc.Conn == nil {
 		return nil
 	}
-	if cw, ok := pc.Conn.(interface{ CloseWrite() error }); ok {
-		return cw.CloseWrite()
+	var firstErr error
+	if err := pc.Flush(); err != nil && firstErr == nil {
+		firstErr = err
 	}
-	return nil
+	if cw, ok := pc.Conn.(interface{ CloseWrite() error }); ok {
+		if err := cw.CloseWrite(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 func (pc *PackedConn) CloseRead() error {
@@ -89,6 +108,37 @@ func (pc *PackedConn) CloseRead() error {
 		return cr.CloseRead()
 	}
 	return nil
+}
+
+func (pc *PackedConn) StopRecording() {
+	pc.recordLock.Lock()
+	pc.recording = false
+	pc.recorder = nil
+	pc.recordLock.Unlock()
+}
+
+func (pc *PackedConn) GetBufferedAndRecorded() []byte {
+	if pc == nil {
+		return nil
+	}
+
+	pc.recordLock.Lock()
+	defer pc.recordLock.Unlock()
+
+	var recorded []byte
+	if pc.recorder != nil {
+		recorded = pc.recorder.Bytes()
+	}
+
+	buffered := pc.reader.Buffered()
+	if buffered <= 0 {
+		return recorded
+	}
+	peeked, _ := pc.reader.Peek(buffered)
+	full := make([]byte, 0, len(recorded)+len(peeked))
+	full = append(full, recorded...)
+	full = append(full, peeked...)
+	return full
 }
 
 func (pc *PackedConn) getPaddingByte() byte {
@@ -211,9 +261,6 @@ func (pc *PackedConn) Write(p []byte) (int, error) {
 		out = append(out, pc.encodeGroup(group&0x3F))
 		out = append(out, pc.padMarker)
 	}
-	if hasPadding && pc.rng.Uint32() <= pc.padThreshold {
-		out = append(out, pc.getPaddingByte())
-	}
 
 	if len(out) > 0 {
 		_, err := pc.Conn.Write(out)
@@ -237,7 +284,6 @@ func (pc *PackedConn) Flush() error {
 		out = append(out, pc.encodeGroup(group&0x3F))
 		out = append(out, pc.padMarker)
 	}
-	out = pc.maybeAddPadding(out)
 
 	if len(out) > 0 {
 		_, err := pc.Conn.Write(out)
@@ -253,9 +299,7 @@ func (pc *PackedConn) Read(p []byte) (int, error) {
 		if n == len(pc.pendingData) {
 			pc.pendingData = pc.pendingData[:0]
 		} else {
-			remaining := len(pc.pendingData) - n
-			copy(pc.pendingData, pc.pendingData[n:])
-			pc.pendingData = pc.pendingData[:remaining]
+			pc.pendingData = pc.pendingData[n:]
 		}
 		return n, nil
 	}
@@ -263,12 +307,28 @@ func (pc *PackedConn) Read(p []byte) (int, error) {
 	for {
 		nr, rErr := pc.reader.Read(pc.rawBuf)
 		if nr > 0 {
+			chunk := pc.rawBuf[:nr]
+			pc.recordLock.Lock()
+			if pc.recording {
+				pc.recorder.Write(chunk)
+			}
+			pc.recordLock.Unlock()
+
 			rBuf := pc.readBitBuf
 			rBits := pc.readBits
 			padMarker := pc.padMarker
 			layout := pc.table.layout
 
-			for _, b := range pc.rawBuf[:nr] {
+			// Worst case: all bytes are hint groups => 6 bits each => ~3/4 bytes decoded.
+			need := (nr*3)/4 + 16
+			if cap(pc.pendingData)-len(pc.pendingData) < need {
+				newCap := len(pc.pendingData) + need
+				buf := make([]byte, len(pc.pendingData), newCap)
+				copy(buf, pc.pendingData)
+				pc.pendingData = buf
+			}
+
+			for _, b := range chunk {
 				if !layout.isHint(b) {
 					if b == padMarker {
 						rBuf = 0
@@ -306,7 +366,7 @@ func (pc *PackedConn) Read(p []byte) (int, error) {
 			return 0, rErr
 		}
 
-		if len(pc.pendingData) > 0 {
+		if len(pc.pendingData) >= len(p) {
 			break
 		}
 	}
@@ -315,9 +375,7 @@ func (pc *PackedConn) Read(p []byte) (int, error) {
 	if n == len(pc.pendingData) {
 		pc.pendingData = pc.pendingData[:0]
 	} else {
-		remaining := len(pc.pendingData) - n
-		copy(pc.pendingData, pc.pendingData[n:])
-		pc.pendingData = pc.pendingData[:remaining]
+		pc.pendingData = pc.pendingData[n:]
 	}
 	return n, nil
 }

@@ -12,12 +12,12 @@ func TestNewTableAndTableSet(t *testing.T) {
 	if t1.IsASCII {
 		t.Fatalf("expected entropy table")
 	}
-	if len(t1.DecodeMap) == 0 || len(t1.EncodeTable[0]) == 0 {
+	if len(t1.decodeKeys) == 0 || len(t1.EncodeTable[0]) == 0 {
 		t.Fatalf("table not initialized")
 	}
 	enc := t1.EncodeTable[0][0]
-	key := packHintsToKey(enc)
-	if got, ok := t1.DecodeMap[key]; !ok || got != 0 {
+	key := uint32(enc[0])<<24 | uint32(enc[1])<<16 | uint32(enc[2])<<8 | uint32(enc[3])
+	if got, ok := t1.Decode(key); !ok || got != 0 {
 		t.Fatalf("decode mismatch: got=%d ok=%v", got, ok)
 	}
 

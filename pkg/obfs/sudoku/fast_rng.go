@@ -16,6 +16,9 @@ import (
 type fastRNG struct {
 	s0 uint64
 	s1 uint64
+
+	u32Cached bool
+	u32Cache  uint32
 }
 
 func newFastRNG() fastRNG {
@@ -60,11 +63,20 @@ func (r *fastRNG) Uint64() uint64 {
 	return res
 }
 
-func (r *fastRNG) Uint32() uint32 { return uint32(r.Uint64()) }
+func (r *fastRNG) Uint32() uint32 {
+	// Amortize the xoroshiro128+ step: each Uint64 yields two Uint32 values.
+	if r.u32Cached {
+		r.u32Cached = false
+		return r.u32Cache
+	}
+	v := r.Uint64()
+	r.u32Cache = uint32(v >> 32)
+	r.u32Cached = true
+	return uint32(v)
+}
 
 // Float32 returns a uniform float32 in [0,1).
 func (r *fastRNG) Float32() float32 {
 	// Use the top 24 bits to fill float32 mantissa-like range.
 	return float32(r.Uint32()>>8) / float32(1<<24)
 }
-
