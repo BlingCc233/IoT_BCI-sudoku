@@ -78,6 +78,34 @@ def fmt_pct(x: float) -> str:
     return f"{x*100:.2f}%"
 
 
+def _min_positive(values: Iterable[float], *, default: float = 0.0) -> float:
+    best: float | None = None
+    for v in values:
+        try:
+            x = float(v)
+        except Exception:  # noqa: BLE001
+            continue
+        if x <= 0 or math.isnan(x) or math.isinf(x):
+            continue
+        if best is None or x < best:
+            best = x
+    return float(best) if best is not None else float(default)
+
+
+def _max_positive(values: Iterable[float], *, default: float = 0.0) -> float:
+    best: float | None = None
+    for v in values:
+        try:
+            x = float(v)
+        except Exception:  # noqa: BLE001
+            continue
+        if x <= 0 or math.isnan(x) or math.isinf(x):
+            continue
+        if best is None or x > best:
+            best = x
+    return float(best) if best is not None else float(default)
+
+
 def render_code_details(*, title: str, rel_path: str, content: str, max_chars: int = 80_000) -> str:
     clipped = content
     note = ""
@@ -160,7 +188,8 @@ _SCENARIO_INFO: dict[str, dict[str, Any]] = {
         "flow": [
             "TCP 回环：server Listen → client Dial。",
             "握手：Ed25519 证书 + X25519 临时密钥交换；握手帧可选 PSK-AEAD 保护（抗探测）。",
-            "会话：AEAD record 传输；外观层：uplink=Sudoku 编码；downlink=纯 Sudoku（非 packed）。",
+            "会话：AEAD record 传输；外观层：uplink=PackedConn（6-bit groups）；downlink=纯 Sudoku（非 packed）。",
+            "bench/evidence 的 pure 场景默认关闭 padding（padding_min/max=0）来减少额外随机数开销，体现纯数独编码的吞吐/时延上限。",
             "业务：client 发送固定 payload（0..255 循环字节）→ server 原样回显 → client 校验一致性。",
         ],
         "checks": [
@@ -176,16 +205,16 @@ _SCENARIO_INFO: dict[str, dict[str, Any]] = {
         ],
     },
     "iotbci-sudoku-packed-tcp": {
-        "what": "IoTBCI + Sudoku（packed downlink，带宽优化 + 可轮转外观）",
+        "what": "IoTBCI + Sudoku（双向 packed，吞吐/时延优先 profile）",
         "flow": [
             "TCP 回环：server Listen → client Dial。",
-            "握手同上；外观层：uplink=Sudoku；downlink=PackedConn（6-bit groups）。",
-            "packed：把明文按 6-bit group 输出为 hint bytes，并按 padding rate 插入 padding。",
+            "握手同上；外观层：uplink=PackedConn；downlink=PackedConn（6-bit groups）。",
+            "packed：把明文按 6-bit group 输出为 hint bytes；bench/evidence 的 packed 场景默认关闭 padding（padding_min/max=0）来展示吞吐/时延上限。",
             "业务：client 发送固定 payload → server 回显 → client 校验一致性。",
         ],
         "checks": [
             "echo payload 与发送 payload 完全一致（bytes.Equal）。",
-            "可轮转外观：CustomTables 会话级轮转，导致 wire_ascii_ratio 可能出现明显差异（见下方解释表）。",
+            "外观受 CustomTable pattern 影响（hint bytes 可打印比例决定 wire_ascii_ratio；开启 padding 会抬高该值）。",
         ],
         "code": [
             "internal/bench/run_iotbci_sudoku_net.go",
@@ -296,14 +325,283 @@ def metric_table(rows: list[MetricsRow], *, title: str) -> str:
     )
 
 
+def _safe_ratio(numer: float, denom: float) -> float:
+    if denom <= 0 or math.isnan(denom) or math.isinf(denom):
+        return 0.0
+    if numer <= 0 or math.isnan(numer) or math.isinf(numer):
+        return 0.0
+    return numer / denom
+
+
+def _weighted_geo_mean(components: dict[str, float], weights: dict[str, float]) -> float:
+    total_w = sum(float(w) for w in weights.values() if w > 0)
+    if total_w <= 0:
+        return 0.0
+    acc = 0.0
+    for k, w in weights.items():
+        if w <= 0:
+            continue
+        v = float(components.get(k, 0.0))
+        if v <= 0 or math.isnan(v) or math.isinf(v):
+            return 0.0
+        acc += (w / total_w) * math.log(v)
+    return float(math.exp(acc))
+
+
+def bci_score_rows(rows: list[MetricsRow]) -> list[dict[str, Any]]:
+    """
+    Composite score tailored for a LAN BCI workload (吞吐/时延/资源占用优先).
+
+    Notes:
+    - Excludes overhead_ratio and wire_bytes_total by design.
+    - Uses normalized ratios to the best value in the same table.
+    """
+    if not rows:
+        return []
+
+    best_rtt = _min_positive((r.avg_rtt_ms for r in rows), default=0.0)
+    best_tp = _max_positive((r.payload_bps for r in rows), default=0.0)
+    best_heap = int(_min_positive((float(r.peak_heap_inuse_bytes) for r in rows), default=0.0))
+    best_calls = int(_min_positive(((r.wire_write_calls + r.wire_read_calls) for r in rows), default=0.0))
+
+    weights = {
+        "rtt": 0.35,
+        "tp": 0.35,
+        "heap": 0.15,
+        "calls": 0.15,
+    }
+
+    scored: list[dict[str, Any]] = []
+    for r in rows:
+        calls = r.wire_write_calls + r.wire_read_calls
+        comps = {
+            "rtt": _safe_ratio(best_rtt, r.avg_rtt_ms),
+            "tp": _safe_ratio(r.payload_bps, best_tp),
+            "heap": _safe_ratio(float(best_heap), float(r.peak_heap_inuse_bytes)),
+            "calls": _safe_ratio(float(best_calls), float(calls)),
+        }
+        score = _weighted_geo_mean(comps, weights)
+        scored.append(
+            {
+                "name": r.name,
+                "score": score,
+                "components": comps,
+                "weights": weights,
+            }
+        )
+
+    scored.sort(key=lambda x: float(x.get("score", 0.0)), reverse=True)
+    for i, x in enumerate(scored, start=1):
+        x["rank"] = i
+    return scored
+
+
+def render_score_table(scores: list[dict[str, Any]], *, title: str) -> str:
+    if not scores:
+        return ""
+
+    weights = scores[0].get("weights") or {}
+    note = (
+        "评分口径：按每个指标在本表内归一化到 best=1，"
+        "然后做加权几何平均（分数越大越好）；"
+        f"权重 rtt/tp/heap/calls={weights.get('rtt')}/{weights.get('tp')}/{weights.get('heap')}/{weights.get('calls')}。"
+        "<br/>不计入：overhead_ratio / wire_bytes_total。"
+    )
+    header = (
+        "<tr>"
+        "<th>rank</th>"
+        "<th>scenario</th>"
+        "<th>score</th>"
+        "<th>rtt</th>"
+        "<th>tp</th>"
+        "<th>heap</th>"
+        "<th>calls</th>"
+        "</tr>"
+    )
+    trs: list[str] = []
+    for s in scores:
+        comps = s.get("components") or {}
+        trs.append(
+            "<tr>"
+            f"<td>{esc(s.get('rank'))}</td>"
+            f"<td><code>{esc(s.get('name'))}</code></td>"
+            f"<td>{fmt_num(float(s.get('score', 0.0)), digits=4)}</td>"
+            f"<td>{fmt_num(float(comps.get('rtt', 0.0)), digits=4)}</td>"
+            f"<td>{fmt_num(float(comps.get('tp', 0.0)), digits=4)}</td>"
+            f"<td>{fmt_num(float(comps.get('heap', 0.0)), digits=4)}</td>"
+            f"<td>{fmt_num(float(comps.get('calls', 0.0)), digits=4)}</td>"
+            "</tr>"
+        )
+    return (
+        "<div class=\"card\">"
+        f"<h2>{esc(title)}</h2>"
+        f"<div class=\"small\">{note}</div>"
+        "<table>"
+        + header
+        + "".join(trs)
+        + "</table>"
+        "</div>"
+    )
+
+
+def sudoku_shortboard(rows: list[MetricsRow]) -> list[dict[str, Any]]:
+    """
+    Identify the biggest 'short-board' metric for Sudoku vs MQTT/DTLS.
+    Only covers performance metrics (excludes overhead/wire bytes).
+    """
+    if not rows:
+        return []
+
+    def by_name(substr: str) -> MetricsRow | None:
+        for r in rows:
+            if substr in r.name:
+                return r
+        return None
+
+    mqtt = by_name("mqtt")
+    dtls = by_name("dtls")
+    baselines = [x for x in [mqtt, dtls] if x is not None]
+    if not baselines:
+        return []
+
+    def worst_vs_baselines(target: MetricsRow) -> dict[str, Any]:
+        # (metric_name, direction)
+        metrics = [
+            ("avg_rtt_ms", "lower"),
+            ("payload_bps", "higher"),
+            ("duration_ms", "lower"),
+            ("peak_heap_inuse_bytes", "lower"),
+        ]
+
+        worst = {"metric": None, "factor": 1.0, "detail": {}}
+        for metric, direction in metrics:
+            tv = float(getattr(target, metric))
+            bvals = [float(getattr(b, metric)) for b in baselines]
+            if direction == "lower":
+                best = min(bvals)
+                factor = _safe_ratio(tv, best)  # >1 means worse than baseline best
+                worse = tv > best
+            else:
+                best = max(bvals)
+                factor = _safe_ratio(best, tv)  # >1 means worse than baseline best
+                worse = tv < best
+
+            worst["detail"][metric] = {"target": tv, "baseline_best": best, "worse": worse, "factor": factor}
+            if worse and factor > float(worst["factor"]):
+                worst = {"metric": metric, "factor": factor, "detail": worst["detail"]}
+        return {"name": target.name, **worst}
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if "iotbci-sudoku" in r.name:
+            out.append(worst_vs_baselines(r))
+    return out
+
+
+def render_shortboard_table(shortboards: list[dict[str, Any]], *, title: str) -> str:
+    if not shortboards:
+        return ""
+
+    def fmt_metric(metric: str, v: float) -> str:
+        if metric.endswith("_ms"):
+            return f"{fmt_num(v, digits=3)} ms"
+        if metric.endswith("_bps"):
+            return f"{fmt_bytes(v)}/s"
+        if metric.endswith("_bytes"):
+            return fmt_bytes(v)
+        return fmt_num(v, digits=3)
+
+    header = (
+        "<tr>"
+        "<th>scenario</th>"
+        "<th>结论</th>"
+        "<th>短板指标</th>"
+        "<th>相对 best baseline 的劣势倍数</th>"
+        "<th>rtt</th>"
+        "<th>tp</th>"
+        "<th>duration</th>"
+        "<th>heap</th>"
+        "</tr>"
+    )
+    trs: list[str] = []
+    for sb in shortboards:
+        name = str(sb.get("name") or "")
+        metric = sb.get("metric")
+        factor = float(sb.get("factor") or 1.0)
+        detail = sb.get("detail") or {}
+
+        def cell(metric_name: str) -> str:
+            d = detail.get(metric_name) or {}
+            f = float(d.get("factor") or 1.0)
+            cls = "warn" if f > 1.0000001 else "ok"
+            return f"<span class=\"badge {cls}\">{fmt_num(f, digits=3)}x</span>"
+
+        verdict = "<span class=\"badge ok\">无短板（相对 MQTT/DTLS 全面不劣）</span>"
+        metric_cell = "<span class=\"badge ok\">(none)</span>"
+        factor_cell = "<span class=\"badge ok\">1.000x</span>"
+        if metric:
+            verdict = "<span class=\"badge warn\">存在短板</span>"
+            metric_name = str(metric)
+            metric_cell = f"<code>{esc(metric_name)}</code>"
+            metric_detail = detail.get(metric_name) or {}
+            tv = float(metric_detail.get("target") or 0.0)
+            bv = float(metric_detail.get("baseline_best") or 0.0)
+            factor_cls = "warn" if factor > 1.0000001 else "ok"
+            factor_cell = (
+                f"<span class=\"badge {factor_cls}\">{fmt_num(factor, digits=3)}x</span>"
+                f"<div class=\"small\">target {esc(fmt_metric(metric_name, tv))} / baseline_best {esc(fmt_metric(metric_name, bv))}</div>"
+            )
+
+        trs.append(
+            "<tr>"
+            f"<td><code>{esc(name)}</code></td>"
+            f"<td>{verdict}</td>"
+            f"<td>{metric_cell}</td>"
+            f"<td>{factor_cell}</td>"
+            f"<td>{cell('avg_rtt_ms')}</td>"
+            f"<td>{cell('payload_bps')}</td>"
+            f"<td>{cell('duration_ms')}</td>"
+            f"<td>{cell('peak_heap_inuse_bytes')}</td>"
+            "</tr>"
+        )
+
+    return (
+        "<div class=\"card\">"
+        f"<h2>{esc(title)}</h2>"
+        "<div class=\"small\">短板效应：把 Sudoku 的关键性能指标与 baseline（MQTT/DTLS）里最优者对比，找出“最拖后腿”的那一项。</div>"
+        "<table>"
+        + header
+        + "".join(trs)
+        + "</table>"
+        "</div>"
+    )
+
+
 def svg_bar_compare(rows: list[MetricsRow], *, title: str, value_fn, fmt_fn) -> str:
     # Simple horizontal bar chart.
     if not rows:
         return ""
+
+    def bar_color(name: str) -> str:
+        n = (name or "").lower()
+        if "iotbci-sudoku-pure" in n:
+            return "var(--sudoku)"
+        if "iotbci-sudoku-packed" in n:
+            return "var(--sudoku2)"
+        if "mqtt" in n:
+            return "var(--mqtt)"
+        if "dtls" in n:
+            return "var(--dtls)"
+        if "coap" in n:
+            return "var(--coap)"
+        if "pure-aead" in n or "aead" in n:
+            return "var(--aead)"
+        return "var(--protoOther)"
+
     values = [float(value_fn(r)) for r in rows]
     vmax = max(values) or 1.0
 
-    left = 180
+    left = 220
     top = 22
     row_h = 26
     bar_w = 520
@@ -316,19 +614,21 @@ def svg_bar_compare(rows: list[MetricsRow], *, title: str, value_fn, fmt_fn) -> 
         v = float(value_fn(r))
         w = int(bar_w * (v / vmax))
         y = top + i * row_h
+        c = bar_color(r.name)
         bars.append(
-            f"<rect x=\"{left}\" y=\"{y}\" width=\"{w}\" height=\"18\" fill=\"#60a5fa\" rx=\"4\" />"
+            f"<rect x=\"{left}\" y=\"{y}\" width=\"{w}\" height=\"18\" fill=\"{c}\" rx=\"6\" opacity=\"0.92\" />"
         )
         labels.append(
-            f"<text x=\"{left-8}\" y=\"{y+14}\" text-anchor=\"end\" fill=\"#e5e7eb\" font-size=\"12\">{esc(r.name)}</text>"
+            f"<rect x=\"{left-200}\" y=\"{y+4}\" width=\"10\" height=\"10\" fill=\"{c}\" rx=\"3\" opacity=\"0.92\" />"
+            f"<text x=\"{left-184}\" y=\"{y+14}\" text-anchor=\"start\" fill=\"var(--text)\" font-size=\"12\">{esc(r.name)}</text>"
         )
         labels.append(
-            f"<text x=\"{left + w + 6}\" y=\"{y+14}\" fill=\"#9ca3af\" font-size=\"12\">{esc(fmt_fn(v))}</text>"
+            f"<text x=\"{left + w + 8}\" y=\"{y+14}\" fill=\"var(--muted)\" font-size=\"12\">{esc(fmt_fn(v))}</text>"
         )
 
     axes = (
-        f"<text x=\"{left}\" y=\"14\" fill=\"#e5e7eb\" font-size=\"13\">{esc(title)}</text>"
-        f"<line x1=\"{left}\" y1=\"{top-6}\" x2=\"{left}\" y2=\"{height-20}\" stroke=\"rgba(255,255,255,.18)\" />"
+        f"<text x=\"{left}\" y=\"14\" fill=\"var(--text)\" font-size=\"13\">{esc(title)}</text>"
+        f"<line x1=\"{left}\" y1=\"{top-6}\" x2=\"{left}\" y2=\"{height-20}\" stroke=\"rgba(17,24,39,.14)\" />"
     )
     return (
         f"<svg viewBox=\"0 0 {width} {height}\" role=\"img\" aria-label=\"{esc(title)}\" "
@@ -341,7 +641,8 @@ def svg_bar_compare(rows: list[MetricsRow], *, title: str, value_fn, fmt_fn) -> 
 
 
 def sudoku_pattern_analysis() -> dict[str, Any]:
-    patterns = ["xppppxvv", "vppxppvx"]
+    # Keep this aligned with the default packed scenario configuration used by the benchmark harness.
+    patterns = ["xppppxvv"]
     out: dict[str, Any] = {"patterns": []}
 
     for pat in patterns:
@@ -372,7 +673,7 @@ def sudoku_pattern_analysis() -> dict[str, Any]:
                 "padding_pool_max": max(pad_pool) if pad_pool else None,
                 "note": (
                     "hint ASCII 比例决定 packed 模式主要字节是否落在 0x20..0x7e；"
-                    "这会直接影响 bench/evidence 的 wire_ascii_ratio（如果本次会话选中了该 pattern）。"
+                    "这会直接影响 bench/evidence 的 wire_ascii_ratio（开启 padding 时也会被抬高）。"
                 ),
             }
         )
@@ -392,6 +693,9 @@ def main() -> int:
     py_ver = ((env["python"].get("stdout") or "") + "\n" + (env["python"].get("stderr") or "")).strip()
 
     # 1) Run reproducible benchmarks.
+    # Use more RTTs to reduce OS noise and make results stable enough for ranking.
+    messages = 5000
+    payload_size = 256
     bench_path = out_dir / "bench.json"
     evidence_dir = out_dir / "evidence_out"
     evidence_json = evidence_dir / "evidence.json"
@@ -401,11 +705,11 @@ def main() -> int:
         "run",
         "./cmd/iotbci-bench",
         "-messages",
-        "200",
+        str(messages),
         "-size",
-        "256",
+        str(payload_size),
         "-timeout",
-        "30s",
+        "60s",
         "-out",
         str(bench_path.relative_to(REPO_ROOT)),
     ]
@@ -416,11 +720,11 @@ def main() -> int:
         "-out_dir",
         str(evidence_dir.relative_to(REPO_ROOT)),
         "-messages",
-        "200",
+        str(messages),
         "-size",
-        "256",
+        str(payload_size),
         "-timeout",
-        "30s",
+        "60s",
     ]
 
     cmd_runs = {
@@ -458,6 +762,11 @@ def main() -> int:
     # 3) Sudoku custom-table effect analysis (解释 packed ascii_ratio 波动来源).
     pattern_info = sudoku_pattern_analysis()
 
+    evidence_scores = bci_score_rows(evidence_rows)
+    bench_scores = bci_score_rows(bench_rows)
+    evidence_shortboards = sudoku_shortboard(evidence_rows)
+    bench_shortboards = sudoku_shortboard(bench_rows)
+
     summary_obj: dict[str, Any] = {
         "generated_at": env["generated_at"],
         "commands": cmd_runs,
@@ -465,6 +774,10 @@ def main() -> int:
         "evidence_json": str(evidence_json.relative_to(REPO_ROOT)) if evidence_json.exists() else str(evidence_json),
         "bench_rows": [r.__dict__ for r in bench_rows],
         "evidence_rows": [r.__dict__ for r in evidence_rows],
+        "bench_scores": bench_scores,
+        "evidence_scores": evidence_scores,
+        "bench_shortboards": bench_shortboards,
+        "evidence_shortboards": evidence_shortboards,
         "sudoku_pattern_analysis": pattern_info,
     }
     write_json(out_dir / "summary.json", summary_obj)
@@ -477,7 +790,7 @@ def main() -> int:
         "<div class=\"card\">"
         "<h2>目标（对齐进度计划表）</h2>"
         "<ul>"
-        "<li>说明对比了什么：统一 payload（默认 256B）与消息轮次（默认 200 RTT），输出 overhead/latency/吞吐/内存/外观指标。</li>"
+        f"<li>说明对比了什么：统一 payload（{payload_size}B）与消息轮次（{messages} RTT），输出 overhead/latency/吞吐/内存/外观指标。</li>"
         "<li>说明如何对比：给出每个协议的运行流程、验证点（为什么能证明成功），并保留一键复现命令与原始 JSON。</li>"
         "<li>说明结论：给出 Sudoku（pure/packed）的优势与代价（好在哪/坏在哪），并解释 packed 外观指标为何会波动。</li>"
         "</ul>"
@@ -507,6 +820,8 @@ def main() -> int:
 
     if evidence_rows:
         body.append(metric_table(evidence_rows, title="结果（推荐）：cmd/iotbci-evidence 回环真实 socket"))
+        body.append(render_score_table(evidence_scores, title="综合评分（BCI score）：evidence"))
+        body.append(render_shortboard_table(evidence_shortboards, title="短板效应分析：Sudoku vs MQTT/DTLS（evidence）"))
         body.append(
             "<div class=\"card\">"
             "<h2>核心对比图（evidence）</h2>"
@@ -632,6 +947,8 @@ def main() -> int:
 
     if bench_rows:
         body.append(metric_table(bench_rows, title="补充：cmd/iotbci-bench（部分场景用 net.Pipe 隔离 OS 噪声）"))
+        body.append(render_score_table(bench_scores, title="综合评分（BCI score）：bench"))
+        body.append(render_shortboard_table(bench_shortboards, title="短板效应分析：Sudoku vs MQTT/DTLS（bench）"))
 
     # Explain Sudoku packed ASCII discrepancy via custom-table analysis.
     pat_lines: list[str] = []
@@ -647,13 +964,13 @@ def main() -> int:
         )
     body.append(
         "<div class=\"card\">"
-        "<h2>解释：为什么 packed 模式的 wire_ascii_ratio 可能波动很大？</h2>"
-        "<div class=\"small\">原因：packed 模式启用了 <code>CustomTables</code>（会话级轮转），当前配置包含两个 pattern；不同 pattern 的 hint 字节集合是否落在可打印 ASCII（0x20..0x7e）差异很大。</div>"
+        "<h2>解释：packed 模式的 wire_ascii_ratio 由什么决定？</h2>"
+        "<div class=\"small\">原因：packed 模式主要线上字节来自 <code>hint bytes</code>；其可打印比例取决于 CustomTable pattern（以及是否开启 padding）。当前 bench/evidence 默认使用单一 pattern，因此不会出现会话级波动；如需轮转，可在配置中提供多个 pattern。</div>"
         "<table>"
         "<tr><th>pattern</th><th>unique hint bytes</th><th>hint ASCII ratio</th><th>padding pool</th><th>padding ASCII ratio</th></tr>"
         + "".join(pat_lines)
         + "</table>"
-        "<div class=\"small\">结论：如果会话选中了 <code>vppxppvx</code>，hint 本身约 36% 可打印，因此整体 wire_ascii_ratio 可能接近 0.36；如果选中 <code>xppppxvv</code>，hint 全部不可打印，则整体 wire_ascii_ratio 会主要由 padding 决定（通常很低）。</div>"
+        "<div class=\"small\">结论：hint ASCII ratio 越高，整体 <code>wire_ascii_ratio</code> 越高；开启 padding 也会抬高该值。固定使用单一 pattern 时该指标在不同运行间基本稳定。</div>"
         "</div>"
     )
 
@@ -662,7 +979,7 @@ def main() -> int:
         "<h2>Sudoku 好在哪 / 坏在哪（基于以上指标的可复现实证）</h2>"
         "<h3>好（优势）</h3>"
         "<ul>"
-        "<li><b>可控外观</b>：pure 模式几乎全可打印（wire_ascii_ratio≈1），packed+custom table 可在“低 ASCII / 中 ASCII”之间切换（见上表）。</li>"
+        "<li><b>可控外观</b>：pure 模式几乎全可打印（wire_ascii_ratio≈1），packed+custom table 可把 wire_ascii_ratio 锁定在某个区间（需要轮转时可配置多个 pattern）。</li>"
         "<li><b>侧写维度更丰富</b>：通过 padding rate、write call 切分、packed 6-bit group，可调节长度分布与写间隔分布（见直方图）。</li>"
         "<li><b>与安全层解耦</b>：外观层在 AEAD 之外工作；pure-aead/DTLS 即使加密强，外观仍接近随机（ASCII≈95/256）。</li>"
         "</ul>"
@@ -728,8 +1045,26 @@ def main() -> int:
     lines.append("")
     lines.append("Key notes:")
     lines.append("- 推荐用 cmd/iotbci-evidence 的 loopback 结果写论文对比；micro-bench 仅作补充。")
-    lines.append("- packed 模式外观指标（wire_ascii_ratio）会随 CustomTables 会话轮转波动：xppppxvv 的 hint 全不可打印；vppxppvx 的 hint 约 36% 可打印。")
+    lines.append("- packed 模式的 wire_ascii_ratio 主要由 CustomTable pattern 与是否开启 padding 决定；固定 pattern 时该指标更稳定。")
     lines.append("- Sudoku 的优势是“可控外观+可调侧写特征”，代价是较高的带宽开销与实现复杂度。")
+    if evidence_scores:
+        top = evidence_scores[0]
+        lines.append("")
+        lines.append("Evidence BCI score (exclude overhead_ratio/wire bytes):")
+        lines.append(f"- #1 {top.get('name')} score={fmt_num(float(top.get('score') or 0.0), digits=4)}")
+        for s in evidence_scores[1:3]:
+            lines.append(f"- #{s.get('rank')} {s.get('name')} score={fmt_num(float(s.get('score') or 0.0), digits=4)}")
+    if evidence_shortboards:
+        lines.append("")
+        lines.append("Sudoku shortboard vs MQTT/DTLS (evidence):")
+        for sb in evidence_shortboards:
+            name = sb.get("name")
+            metric = sb.get("metric")
+            factor = float(sb.get("factor") or 1.0)
+            if metric:
+                lines.append(f"- {name}: shortboard={metric} worse≈{fmt_num(factor, digits=3)}x")
+            else:
+                lines.append(f"- {name}: no shortboard (beats MQTT/DTLS on key perf metrics)")
     lines.append("")
     write_text(out_dir / "summary.txt", "\n".join(lines) + "\n")
 

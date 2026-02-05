@@ -26,43 +26,59 @@ def esc(s: object) -> str:
 
 _CSS = r"""
 :root{
-  --bg:#0b1020;
-  --card:#111827;
-  --text:#e5e7eb;
-  --muted:#9ca3af;
-  --accent:#a78bfa;
-  --ok:#10b981;
-  --bad:#ef4444;
+  --bg:#ffffff;
+  --card:#ffffff;
+  --text:#111827;
+  --muted:#6b7280;
+  --accent:#2563eb;
+  --ok:#16a34a;
+  --bad:#dc2626;
   --warn:#f59e0b;
+  --border:#e5e7eb;
+  --chip:#f3f4f6;
+  --shadow:0 6px 18px rgba(17,24,39,.08);
   --mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --hint:#6d28d9;
+  --pad:#0ea5e9;
+  --other:#cbd5e1;
+
+  /* Protocol palette (aligned with cmd/iotbci-dashboard). */
+  --sudoku:#6d28d9;
+  --sudoku2:#a78bfa;
+  --coap:#16a34a;
+  --aead:#0ea5e9;
+  --dtls:#f97316;
+  --mqtt:#ef4444;
+  --protoOther:#64748b;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.45}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
-.container{max-width:1100px;margin:0 auto;padding:24px}
-h1{font-size:24px;margin:0 0 10px}
-h2{font-size:18px;margin:0 0 8px}
+.container{max-width:1180px;margin:0 auto;padding:20px 20px 48px}
+h1{font-size:20px;margin:8px 0 10px;letter-spacing:.2px}
+h2{font-size:16px;margin:0 0 10px}
 .small{color:var(--muted);font-size:12px}
-.card{background:rgba(17,24,39,.96);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;margin:16px 0;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin:14px 0;box-shadow:var(--shadow)}
 pre,code{font-family:var(--mono)}
-pre{background:rgba(0,0,0,.35);padding:12px;border-radius:10px;overflow:auto}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{border:1px solid rgba(255,255,255,.08);padding:8px 10px;vertical-align:top}
-th{text-align:left;background:rgba(255,255,255,.05)}
+pre{background:#f9fafb;border:1px solid var(--border);padding:12px;border-radius:12px;overflow:auto}
+code{background:rgba(17,24,39,.04);border:1px solid rgba(17,24,39,.06);padding:2px 6px;border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{border:1px solid var(--border);padding:8px 10px;vertical-align:top}
+th{text-align:left;background:#f9fafb;color:#374151}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
-.badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.12)}
-.badge.ok{color:var(--ok);border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.08)}
-.badge.fail{color:var(--bad);border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.08)}
-.badge.warn{color:var(--warn);border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.08)}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:var(--chip);color:var(--text)}
+.badge.ok{color:var(--ok)}
+.badge.fail{color:var(--bad)}
+.badge.warn{color:var(--warn)}
 .bytes{line-height:1.9}
-.byte{display:inline-block;font-family:var(--mono);padding:1px 6px;border-radius:6px;margin:1px 2px 1px 0;border:1px solid rgba(255,255,255,.12)}
-.byte.hint{background:rgba(167,139,250,.22);border-color:rgba(167,139,250,.45)}
-.byte.pad{background:rgba(96,165,250,.18);border-color:rgba(96,165,250,.40)}
-.byte.other{background:rgba(255,255,255,.05)}
+.byte{display:inline-block;font-family:var(--mono);padding:1px 6px;border-radius:8px;margin:1px 2px 1px 0;border:1px solid var(--border);background:rgba(17,24,39,.02)}
+.byte.hint{background:rgba(109,40,217,.10);border-color:rgba(109,40,217,.28)}
+.byte.pad{background:rgba(14,165,233,.10);border-color:rgba(14,165,233,.28)}
+.byte.other{background:rgba(17,24,39,.02)}
 .sudoku-grid{border-collapse:separate;border-spacing:4px;margin:6px 0}
-.sudoku-grid td{width:32px;height:32px;text-align:center;font-family:var(--mono);font-size:13px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.10);border-radius:8px}
-.sudoku-grid td.hl{background:rgba(167,139,250,.22);border-color:rgba(167,139,250,.55)}
+.sudoku-grid td{width:32px;height:32px;text-align:center;font-family:var(--mono);font-size:13px;background:#f9fafb;border:1px solid var(--border);border-radius:10px}
+.sudoku-grid td.hl{background:rgba(109,40,217,.10);border-color:rgba(109,40,217,.28)}
 svg{max-width:100%;height:auto}
 """
 
@@ -164,10 +180,10 @@ def svg_byte_grid(
 
     def color(b: int) -> str:
         if b in hint:
-            return "#a78bfa"
+            return "var(--hint)"
         if b in pad:
-            return "#60a5fa"
-        return "#111827"
+            return "var(--pad)"
+        return "var(--other)"
 
     rects: list[str] = []
     for b in range(256):
@@ -180,17 +196,17 @@ def svg_byte_grid(
 
     legend_y = margin + 16 * cell + 14
     legend = (
-        f"<rect x=\"{margin}\" y=\"{legend_y}\" width=\"10\" height=\"10\" fill=\"#a78bfa\" rx=\"2\" />"
-        f"<text x=\"{margin+14}\" y=\"{legend_y+9}\" fill=\"#e5e7eb\" font-size=\"12\">hint</text>"
-        f"<rect x=\"{margin+70}\" y=\"{legend_y}\" width=\"10\" height=\"10\" fill=\"#60a5fa\" rx=\"2\" />"
-        f"<text x=\"{margin+84}\" y=\"{legend_y+9}\" fill=\"#e5e7eb\" font-size=\"12\">padding</text>"
-        f"<rect x=\"{margin+170}\" y=\"{legend_y}\" width=\"10\" height=\"10\" fill=\"#111827\" rx=\"2\" />"
-        f"<text x=\"{margin+184}\" y=\"{legend_y+9}\" fill=\"#e5e7eb\" font-size=\"12\">other</text>"
+        f"<rect x=\"{margin}\" y=\"{legend_y}\" width=\"10\" height=\"10\" fill=\"var(--hint)\" rx=\"2\" />"
+        f"<text x=\"{margin+14}\" y=\"{legend_y+9}\" fill=\"var(--muted)\" font-size=\"12\">hint</text>"
+        f"<rect x=\"{margin+70}\" y=\"{legend_y}\" width=\"10\" height=\"10\" fill=\"var(--pad)\" rx=\"2\" />"
+        f"<text x=\"{margin+84}\" y=\"{legend_y+9}\" fill=\"var(--muted)\" font-size=\"12\">padding</text>"
+        f"<rect x=\"{margin+170}\" y=\"{legend_y}\" width=\"10\" height=\"10\" fill=\"var(--other)\" rx=\"2\" />"
+        f"<text x=\"{margin+184}\" y=\"{legend_y+9}\" fill=\"var(--muted)\" font-size=\"12\">other</text>"
     )
     return (
         f"<svg viewBox=\"0 0 {w} {h}\" role=\"img\" aria-label=\"{esc(title)}\" "
         "xmlns=\"http://www.w3.org/2000/svg\">"
-        f"<text x=\"{margin}\" y=\"14\" fill=\"#e5e7eb\" font-size=\"13\">{esc(title)}</text>"
+        f"<text x=\"{margin}\" y=\"14\" fill=\"var(--text)\" font-size=\"13\">{esc(title)}</text>"
         + "".join(rects)
         + legend
         + "</svg>"
@@ -201,7 +217,7 @@ def svg_histogram(
     counts: Mapping[int, int],
     *,
     title: str,
-    bar_color: str = "#60a5fa",
+    bar_color: str = "var(--pad)",
     width: int = 640,
     height: int = 220,
 ) -> str:
@@ -231,16 +247,16 @@ def svg_histogram(
         bars.append(f"<rect x=\"{x}\" y=\"{y}\" width=\"{bw_eff}\" height=\"{h}\" fill=\"{bar_color}\" rx=\"3\" />")
         labels.append(
             f"<text x=\"{x + bw_eff/2}\" y=\"{top + plot_h + 18}\" text-anchor=\"middle\" "
-            f"fill=\"#9ca3af\" font-size=\"12\">{esc(b)}</text>"
+            f"fill=\"var(--muted)\" font-size=\"12\">{esc(b)}</text>"
         )
 
     y0 = top + plot_h
     axes = (
-        f"<line x1=\"{left}\" y1=\"{top}\" x2=\"{left}\" y2=\"{y0}\" stroke=\"rgba(255,255,255,.18)\" />"
-        f"<line x1=\"{left}\" y1=\"{y0}\" x2=\"{width-right}\" y2=\"{y0}\" stroke=\"rgba(255,255,255,.18)\" />"
-        f"<text x=\"{left}\" y=\"14\" fill=\"#e5e7eb\" font-size=\"13\">{esc(title)}</text>"
-        f"<text x=\"{left-8}\" y=\"{top+10}\" text-anchor=\"end\" fill=\"#9ca3af\" font-size=\"11\">{esc(max_v)}</text>"
-        f"<text x=\"{left-8}\" y=\"{y0}\" text-anchor=\"end\" fill=\"#9ca3af\" font-size=\"11\">0</text>"
+        f"<line x1=\"{left}\" y1=\"{top}\" x2=\"{left}\" y2=\"{y0}\" stroke=\"rgba(17,24,39,.14)\" />"
+        f"<line x1=\"{left}\" y1=\"{y0}\" x2=\"{width-right}\" y2=\"{y0}\" stroke=\"rgba(17,24,39,.14)\" />"
+        f"<text x=\"{left}\" y=\"14\" fill=\"var(--text)\" font-size=\"13\">{esc(title)}</text>"
+        f"<text x=\"{left-8}\" y=\"{top+10}\" text-anchor=\"end\" fill=\"var(--muted)\" font-size=\"11\">{esc(max_v)}</text>"
+        f"<text x=\"{left-8}\" y=\"{y0}\" text-anchor=\"end\" fill=\"var(--muted)\" font-size=\"11\">0</text>"
     )
     return (
         f"<svg viewBox=\"0 0 {width} {height}\" role=\"img\" aria-label=\"{esc(title)}\" "
