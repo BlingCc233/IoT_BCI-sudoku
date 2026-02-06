@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-02-06T18:11:27.637644+08:00",
+  "scenarios": [
+    {
+      "name": "replay",
+      "expected": "server rejects replayed client handshake with ErrReplayDetected",
+      "success": true,
+      "duration_ms": 12.046292,
+      "server_error": "iotbci suspicious: iotbci: replay detected"
+    },
+    {
+      "name": "mitm-tamper",
+      "expected": "server detects tampering during handshake (SuspiciousError/AuthFailed/ProtocolViolation)",
+      "success": true,
+      "duration_ms": 2001.080042,
+      "server_error": "iotbci suspicious: table selection failed",
+      "client_error": "write pipe: i/o timeout"
+    },
+    {
+      "name": "resource-probe-flood",
+      "expected": "server rejects oversized handshake probe (bounded by maxProbeBytes)",
+      "success": true,
+      "duration_ms": 0.65625,
+      "server_error": "iotbci suspicious: table selection failed"
+    }
+  ]
+}

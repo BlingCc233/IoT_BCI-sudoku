@@ -1,0 +1,916 @@
+{
+  "bci_sidechannel": {
+    "accuracy_by_mode": {
+      "sudoku_no_padding": 1.0,
+      "sudoku_padding_20_45": 0.16666666666666666,
+      "tls_baseline": 1.0
+    },
+    "class_defs": [
+      {
+        "name": "MI-left",
+        "payload_size": 80
+      },
+      {
+        "name": "MI-right",
+        "payload_size": 82
+      },
+      {
+        "name": "Blink",
+        "payload_size": 84
+      },
+      {
+        "name": "Rest",
+        "payload_size": 86
+      }
+    ],
+    "commands": [
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-left_s80_r1_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "80",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.6339238339999995,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-left_s80_r1_pad",
+          "-messages",
+          "180",
+          "-size",
+          "80",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.6354251670000002,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-left_s80_r2_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "80",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.601447791,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-left_s80_r2_pad",
+          "-messages",
+          "180",
+          "-size",
+          "80",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.6164537910000005,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-left_s80_r3_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "80",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.5718710419999997,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-left_s80_r3_pad",
+          "-messages",
+          "180",
+          "-size",
+          "80",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.604409167,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-right_s82_r1_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "82",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.56368975,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-right_s82_r1_pad",
+          "-messages",
+          "180",
+          "-size",
+          "82",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.5953096249999987,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-right_s82_r2_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "82",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.6471275829999996,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-right_s82_r2_pad",
+          "-messages",
+          "180",
+          "-size",
+          "82",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.6678428749999998,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-right_s82_r3_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "82",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.5796717919999992,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/MI-right_s82_r3_pad",
+          "-messages",
+          "180",
+          "-size",
+          "82",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.5689547499999996,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Blink_s84_r1_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "84",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.6493717500000002,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Blink_s84_r1_pad",
+          "-messages",
+          "180",
+          "-size",
+          "84",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.5672321670000002,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Blink_s84_r2_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "84",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.6413075839999998,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Blink_s84_r2_pad",
+          "-messages",
+          "180",
+          "-size",
+          "84",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.5564050829999996,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Blink_s84_r3_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "84",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.5602544170000012,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Blink_s84_r3_pad",
+          "-messages",
+          "180",
+          "-size",
+          "84",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.5831249160000009,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Rest_s86_r1_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "86",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.6078316250000011,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Rest_s86_r1_pad",
+          "-messages",
+          "180",
+          "-size",
+          "86",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.5773544160000004,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Rest_s86_r2_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "86",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.6089394170000002,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Rest_s86_r2_pad",
+          "-messages",
+          "180",
+          "-size",
+          "86",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.5401145419999978,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Rest_s86_r3_nopad",
+          "-messages",
+          "180",
+          "-size",
+          "86",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.5624831659999998,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/bci_runs/Rest_s86_r3_pad",
+          "-messages",
+          "180",
+          "-size",
+          "86",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "20",
+          "-sudoku_padding_max",
+          "45"
+        ],
+        "duration_s": 0.5865747920000004,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    ],
+    "confusions": {
+      "sudoku_no_padding": {
+        "Blink": {
+          "Blink": 3,
+          "MI-left": 0,
+          "MI-right": 0,
+          "Rest": 0
+        },
+        "MI-left": {
+          "Blink": 0,
+          "MI-left": 3,
+          "MI-right": 0,
+          "Rest": 0
+        },
+        "MI-right": {
+          "Blink": 0,
+          "MI-left": 0,
+          "MI-right": 3,
+          "Rest": 0
+        },
+        "Rest": {
+          "Blink": 0,
+          "MI-left": 0,
+          "MI-right": 0,
+          "Rest": 3
+        }
+      },
+      "sudoku_padding_20_45": {
+        "Blink": {
+          "Blink": 0,
+          "MI-left": 2,
+          "MI-right": 1,
+          "Rest": 0
+        },
+        "MI-left": {
+          "Blink": 2,
+          "MI-left": 0,
+          "MI-right": 0,
+          "Rest": 1
+        },
+        "MI-right": {
+          "Blink": 1,
+          "MI-left": 1,
+          "MI-right": 0,
+          "Rest": 1
+        },
+        "Rest": {
+          "Blink": 0,
+          "MI-left": 0,
+          "MI-right": 1,
+          "Rest": 2
+        }
+      },
+      "tls_baseline": {
+        "Blink": {
+          "Blink": 3,
+          "MI-left": 0,
+          "MI-right": 0,
+          "Rest": 0
+        },
+        "MI-left": {
+          "Blink": 0,
+          "MI-left": 3,
+          "MI-right": 0,
+          "Rest": 0
+        },
+        "MI-right": {
+          "Blink": 0,
+          "MI-left": 0,
+          "MI-right": 3,
+          "Rest": 0
+        },
+        "Rest": {
+          "Blink": 0,
+          "MI-left": 0,
+          "MI-right": 0,
+          "Rest": 3
+        }
+      }
+    },
+    "repeats": 3
+  },
+  "dpi_ascii_disguise": {
+    "sudoku_ascii": {
+      "ascii_ratio": 0.9833984375,
+      "dpi_guess": "cleartext-like",
+      "entropy": 6.43699514958671,
+      "http_like": false,
+      "json_parse_ok": false,
+      "preview": "R1Yys~n])#p0#@I`DOgQz[vxVaOmvewWr^LvDEBWp({oZN@LPSv]$T$[Nv:A|R@/:;s}f>f9m<|dza-[{4dAGf@wS\\_T\\",
+      "utf8_ratio": 1.0
+    },
+    "tls_binary": {
+      "ascii_ratio": 0.3837890625,
+      "dpi_guess": "encrypted-binary",
+      "entropy": 7.80519489361877,
+      "http_like": false,
+      "json_parse_ok": false,
+      "preview": "Af-a\fXd\\\u0007X\u0000M>%'̑^\u001a<gZOD\u0011ߖ؉HUiȠ֋P?e\u0013#?\u0014:^\u0002>a/!Uیr5,~\"a;lgf\\Gx'\u0011h\u0002\n\u0000\b^c>؅*m\u001e*\rk;BF}\u0005Bտe\"\u001aI\u00128_}\u0000\u0018",
+      "utf8_ratio": 0.56640625
+    }
+  },
+  "env": {
+    "go": "go version go1.23.3 darwin/arm64",
+    "python": "Python 3.9.6"
+  },
+  "generated_at": "2026-02-06 18:11:08",
+  "mitm_compare": {
+    "commands": {
+      "iotbci_attack": {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-attack",
+          "-timeout",
+          "20s",
+          "-out",
+          "evidence_steps/06_fingerprint_sidechannel/out/attack_report.json"
+        ],
+        "duration_s": 2.567349749999998,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      "tls_mitm_demo": {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-tls-mitm-demo",
+          "-messages",
+          "64",
+          "-timeout",
+          "20s",
+          "-out",
+          "evidence_steps/06_fingerprint_sidechannel/out/tls_mitm_demo.json"
+        ],
+        "duration_s": 0.6325571249999982,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    },
+    "sudoku_attack_scenario": {
+      "client_error": "write pipe: i/o timeout",
+      "duration_ms": 2001.080042,
+      "expected": "server detects tampering during handshake (SuspiciousError/AuthFailed/ProtocolViolation)",
+      "name": "mitm-tamper",
+      "server_error": "iotbci suspicious: table selection failed",
+      "success": true
+    },
+    "sudoku_mitm_block_ok": true,
+    "tls_mitm_recover_rate": 1.0,
+    "tls_mitm_success": true
+  },
+  "protocol_fingerprint": {
+    "accuracy": 0.9666666666666667,
+    "aparecium_reference": "https://github.com/ban6cat6/aparecium",
+    "commands": [
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/proto_runs/r1",
+          "-messages",
+          "800",
+          "-size",
+          "256",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.758780958,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/proto_runs/r2",
+          "-messages",
+          "800",
+          "-size",
+          "256",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.719007875,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/proto_runs/r3",
+          "-messages",
+          "800",
+          "-size",
+          "256",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.8530138329999999,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/proto_runs/r4",
+          "-messages",
+          "800",
+          "-size",
+          "256",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.7591572910000002,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      },
+      {
+        "cmd": [
+          "go",
+          "run",
+          "./cmd/iotbci-evidence",
+          "-out_dir",
+          "evidence_steps/06_fingerprint_sidechannel/out/proto_runs/r5",
+          "-messages",
+          "800",
+          "-size",
+          "256",
+          "-timeout",
+          "90s",
+          "-sudoku_padding_min",
+          "0",
+          "-sudoku_padding_max",
+          "0"
+        ],
+        "duration_s": 0.7177012500000002,
+        "exit_code": 0,
+        "stderr": "",
+        "stdout": ""
+      }
+    ],
+    "confusion": {
+      "coap-udp": {
+        "coap-udp": 5,
+        "dtls-ecdhe-ecdsa-aes256cbc": 0,
+        "iotbci-sudoku-packed-tcp": 0,
+        "iotbci-sudoku-pure-tcp": 0,
+        "mqtt-3.1.1-qos0-tls": 0,
+        "pure-aead-tcp": 0
+      },
+      "dtls-ecdhe-ecdsa-aes256cbc": {
+        "coap-udp": 0,
+        "dtls-ecdhe-ecdsa-aes256cbc": 5,
+        "iotbci-sudoku-packed-tcp": 0,
+        "iotbci-sudoku-pure-tcp": 0,
+        "mqtt-3.1.1-qos0-tls": 0,
+        "pure-aead-tcp": 0
+      },
+      "iotbci-sudoku-packed-tcp": {
+        "coap-udp": 0,
+        "dtls-ecdhe-ecdsa-aes256cbc": 0,
+        "iotbci-sudoku-packed-tcp": 4,
+        "iotbci-sudoku-pure-tcp": 1,
+        "mqtt-3.1.1-qos0-tls": 0,
+        "pure-aead-tcp": 0
+      },
+      "iotbci-sudoku-pure-tcp": {
+        "coap-udp": 0,
+        "dtls-ecdhe-ecdsa-aes256cbc": 0,
+        "iotbci-sudoku-packed-tcp": 0,
+        "iotbci-sudoku-pure-tcp": 5,
+        "mqtt-3.1.1-qos0-tls": 0,
+        "pure-aead-tcp": 0
+      },
+      "mqtt-3.1.1-qos0-tls": {
+        "coap-udp": 0,
+        "dtls-ecdhe-ecdsa-aes256cbc": 0,
+        "iotbci-sudoku-packed-tcp": 0,
+        "iotbci-sudoku-pure-tcp": 0,
+        "mqtt-3.1.1-qos0-tls": 5,
+        "pure-aead-tcp": 0
+      },
+      "pure-aead-tcp": {
+        "coap-udp": 0,
+        "dtls-ecdhe-ecdsa-aes256cbc": 0,
+        "iotbci-sudoku-packed-tcp": 0,
+        "iotbci-sudoku-pure-tcp": 0,
+        "mqtt-3.1.1-qos0-tls": 0,
+        "pure-aead-tcp": 5
+      }
+    },
+    "features_csv": "aparecium_style_protocol_features.csv",
+    "labels": [
+      "coap-udp",
+      "dtls-ecdhe-ecdsa-aes256cbc",
+      "iotbci-sudoku-packed-tcp",
+      "iotbci-sudoku-pure-tcp",
+      "mqtt-3.1.1-qos0-tls",
+      "pure-aead-tcp"
+    ],
+    "repeats": 5,
+    "sample_count": 30
+  }
+}

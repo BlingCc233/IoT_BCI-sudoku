@@ -1,0 +1,10 @@
+Generated at: 2026-02-06 18:11:08
+Protocol fingerprint LOO accuracy: 96.67%
+BCI class recovery:
+- TLS baseline: 100.00%
+- Sudoku no padding: 100.00%
+- Sudoku padding 20-45%: 16.67%
+DPI guess (Sudoku ASCII): cleartext-like (ascii_ratio=0.9834)
+DPI guess (TLS binary): encrypted-binary (ascii_ratio=0.3838)
+TLS MITM recover rate: 1.0000
+Sudoku MITM tamper blocked: True
