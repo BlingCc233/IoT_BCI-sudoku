@@ -612,21 +612,21 @@
 
 \newcommand{\makecover}{
 \thispagestyle{empty}
-\setlength{\extrarowheight}{9pt}
+\ifbachelor{\setlength{\extrarowheight}{4pt}}{\setlength{\extrarowheight}{9pt}}
 \ifchinesebook{\pdfbookmark{封面}{cover}}{\pdfbookmark{Cover}{cover}}
 \begin{center}
   \ifbachelor{\includegraphics{bachelor_font.pdf} \\}{
     \fontsize{22pt}{22pt}\selectfont 电\hspace{0.5em}子\hspace{0.5em}科\hspace{0.5em}技%
     \hspace{0.5em}大\hspace{0.5em}学 \\[7bp]}
   \fontsize{12pt}{12pt}\selectfont UNIVERSITY OF ELECTRONIC SCIENCE
-    AND TECHNOLOGY OF CHINA \\[36bp]
+    AND TECHNOLOGY OF CHINA \\[24bp]
   \ifbachelor{\fontsize{42pt}{42pt}\selectfont{\bfseries\chinesebooktitle} \\[24bp]}{
     \fontsize{42pt}{42pt}\selectfont\chinesebooktitle \\[24bp]}
   \fontsize{16pt}{16pt}\selectfont
-    \textnormal{\MakeUppercase{\englishbooktitle}} \\[48bp]
+    \textnormal{\MakeUppercase{\englishbooktitle}} \\[24bp]
   \ifbachelor{
     %\vspace{0.4cm}
-    \includegraphics[width=180bp]{logo.pdf} \\[40bp]
+    \includegraphics[width=180bp]{logo.pdf} \\[18bp]
   }{\includegraphics[width=180bp]{logo.pdf} \\[40bp]}
   \begin{tabular}{lp{4.2in}}
     \bfseries\fontsize{18pt}{18pt}\selectfont 论文题目 & \multirow[t]{2}{4.2in}{
@@ -637,7 +637,7 @@
     \cline{2-2}
             & \\
     \cline{2-2}
-  \end{tabular}\hspace*{\fill} \\[\baselineskip]
+  \end{tabular}\hspace*{\fill} \\[4bp]
   \begin{tabular}{>{\bfseries\fontsize{16pt}{16pt}\selectfont}l
       >{\centering\arraybackslash\bfseries\fontsize{16pt}{16pt}\selectfont}
       p{3.77in}p{15pt}}
@@ -656,7 +656,6 @@
 
 \ifbachelor{}{\thetitlepage}
 
-\newpage
 \setcounter{page}{1}
 \setlength{\extrarowheight}{2pt}
 }
