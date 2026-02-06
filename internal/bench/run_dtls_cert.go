@@ -31,18 +31,18 @@ func RunDTLSCertECDHEOnUDP(ctx context.Context, cfg RunConfig, listenAddr string
 
 	// One CA issues both server/client certs, mutual authentication enabled.
 	serverCfg := &dtls.Config{
-		Certificates: []tls.Certificate{certs.ServerCert},
-		ClientCAs:    certs.CAPool,
-		ClientAuth:   dtls.RequireAndVerifyClientCert,
-		CipherSuites: []dtls.CipherSuiteID{dtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+		Certificates:   []tls.Certificate{certs.ServerCert},
+		ClientCAs:      certs.CAPool,
+		ClientAuth:     dtls.RequireAndVerifyClientCert,
+		CipherSuites:   []dtls.CipherSuiteID{dtls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA},
 		FlightInterval: 50 * time.Millisecond,
 		MTU:            1200,
 	}
 	clientCfg := &dtls.Config{
-		Certificates: []tls.Certificate{certs.ClientCert},
-		RootCAs:      certs.CAPool,
-		ServerName:   "127.0.0.1",
-		CipherSuites: []dtls.CipherSuiteID{dtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+		Certificates:   []tls.Certificate{certs.ClientCert},
+		RootCAs:        certs.CAPool,
+		ServerName:     "127.0.0.1",
+		CipherSuites:   []dtls.CipherSuiteID{dtls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA},
 		FlightInterval: 50 * time.Millisecond,
 		MTU:            1200,
 	}
@@ -169,7 +169,7 @@ func RunDTLSCertECDHEOnUDP(ctx context.Context, cfg RunConfig, listenAddr string
 	}
 
 	return ProtocolResult{
-		Name:                          "dtls-ecdhe-ecdsa-aes128gcm",
+		Name:                          "dtls-ecdhe-ecdsa-aes256cbc",
 		Messages:                      cfg.Messages,
 		PayloadSize:                   cfg.PayloadSize,
 		PayloadBytesTotal:             payloadBytes,
@@ -181,6 +181,8 @@ func RunDTLSCertECDHEOnUDP(ctx context.Context, cfg RunConfig, listenAddr string
 		WireReadCalls:                 ws.readCalls,
 		WireWriteSizeBinsLog2:         ws.writeSizeBins,
 		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
 		WireActiveDurationMillis:      ws.activeDurationMillis,
 		WireEntropy:                   bs.Entropy,
 		WireASCIIRatio:                bs.ASCIIRatio,

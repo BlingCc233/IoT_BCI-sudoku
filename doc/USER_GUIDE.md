@@ -85,6 +85,18 @@ go run ./cmd/iotbci-evidence -out_dir evidence_out -messages 200 -size 256 -time
 go run ./cmd/iotbci-attack -timeout 10s -out attack_report.json
 ```
 
+- TLS MITM 明文恢复演示（对照实验，输出 JSON）：
+
+```bash
+go run ./cmd/iotbci-tls-mitm-demo -messages 64 -timeout 20s -out tls_mitm_demo.json
+```
+
+- 侧写实验可通过 evidence 参数打开 Sudoku padding（默认 0/0）：
+
+```bash
+go run ./cmd/iotbci-evidence -out_dir evidence_out -messages 200 -size 256 -timeout 30s -sudoku_padding_min 20 -sudoku_padding_max 45
+```
+
 - 统一可视化（bench/evidence/attack 一页查看）：
 
 ```bash

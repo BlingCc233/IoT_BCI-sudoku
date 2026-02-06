@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const wireSeqSampleCap = 1024
+
 type WireStats struct {
 	BytesWritten atomic.Int64
 	BytesRead    atomic.Int64
@@ -21,6 +23,12 @@ type WireStats struct {
 
 	// WriteInterArrivalMsBins is a log2 histogram of inter-arrival times between write calls (0..31).
 	WriteInterArrivalMsBins [32]atomic.Uint64
+
+	// Sequence samples preserve the first N write sizes / inter-arrival gaps for sequence-based analysis.
+	WriteSizeSeqN  atomic.Uint32
+	WriteIATMsSeqN atomic.Uint32
+	WriteSizeSeq   [wireSeqSampleCap]atomic.Uint32
+	WriteIATMsSeq  [wireSeqSampleCap]atomic.Uint32
 
 	FirstWriteUnixNano atomic.Int64
 	LastWriteUnixNano  atomic.Int64
@@ -59,12 +67,50 @@ func (s *WireStats) SnapshotWriteInterArrivalMsBins() [32]uint64 {
 	return out
 }
 
+func (s *WireStats) SnapshotWriteSizeSeq() []uint32 {
+	if s == nil {
+		return nil
+	}
+	n := int(s.WriteSizeSeqN.Load())
+	if n > wireSeqSampleCap {
+		n = wireSeqSampleCap
+	}
+	out := make([]uint32, n)
+	for i := 0; i < n; i++ {
+		out[i] = s.WriteSizeSeq[i].Load()
+	}
+	return out
+}
+
+func (s *WireStats) SnapshotWriteIATMsSeq() []uint32 {
+	if s == nil {
+		return nil
+	}
+	n := int(s.WriteIATMsSeqN.Load())
+	if n > wireSeqSampleCap {
+		n = wireSeqSampleCap
+	}
+	out := make([]uint32, n)
+	for i := 0; i < n; i++ {
+		out[i] = s.WriteIATMsSeq[i].Load()
+	}
+	return out
+}
+
 func (s *WireStats) recordWrite(p []byte) {
 	if len(p) == 0 {
 		return
 	}
 	s.BytesWritten.Add(int64(len(p)))
 	s.WriteCalls.Add(1)
+
+	if idx := int(s.WriteSizeSeqN.Add(1)) - 1; idx >= 0 && idx < wireSeqSampleCap {
+		size := len(p)
+		if size > 0xFFFF {
+			size = 0xFFFF
+		}
+		s.WriteSizeSeq[idx].Store(uint32(size))
+	}
 
 	now := time.Now().UnixNano()
 	if s.FirstWriteUnixNano.Load() == 0 {
@@ -82,6 +128,13 @@ func (s *WireStats) recordWrite(p []byte) {
 			bin = 31
 		}
 		s.WriteInterArrivalMsBins[bin].Add(1)
+
+		if idx := int(s.WriteIATMsSeqN.Add(1)) - 1; idx >= 0 && idx < wireSeqSampleCap {
+			if ms > 0xFFFF {
+				ms = 0xFFFF
+			}
+			s.WriteIATMsSeq[idx].Store(uint32(ms))
+		}
 	}
 
 	// Byte frequency: keep small writes fast (common in MQTT/TLS), but avoid per-byte atomics

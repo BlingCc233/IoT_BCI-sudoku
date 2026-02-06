@@ -25,6 +25,8 @@ type ProtocolResult struct {
 
 	WireWriteSizeBinsLog2         [32]uint64 `json:"wire_write_size_bins_log2"`
 	WireWriteInterArrivalMsBinsL2 [32]uint64 `json:"wire_write_interarrival_ms_bins_log2"`
+	WireWriteSizeSeqSample        []uint32   `json:"wire_write_size_seq_sample,omitempty"`
+	WireWriteIATMsSeqSample       []uint32   `json:"wire_write_interarrival_ms_seq_sample,omitempty"`
 	WireActiveDurationMillis      float64    `json:"wire_active_duration_ms"`
 
 	WireEntropy    float64 `json:"wire_entropy"`
@@ -33,6 +35,11 @@ type ProtocolResult struct {
 	PeakHeapAllocBytes uint64 `json:"peak_heap_alloc_bytes"`
 	PeakHeapInuseBytes uint64 `json:"peak_heap_inuse_bytes"`
 	PeakSysBytes       uint64 `json:"peak_sys_bytes"`
+
+	// PhaseDelta* captures delta peak relative to the phase baseline sample.
+	PhaseDeltaHeapAllocBytes uint64 `json:"phase_delta_heap_alloc_bytes"`
+	PhaseDeltaHeapInuseBytes uint64 `json:"phase_delta_heap_inuse_bytes"`
+	PhaseDeltaSysBytes       uint64 `json:"phase_delta_sys_bytes"`
 
 	PayloadThroughputBps float64 `json:"payload_throughput_bps"`
 	WireThroughputBps    float64 `json:"wire_throughput_bps"`

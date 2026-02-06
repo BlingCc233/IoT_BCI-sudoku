@@ -51,11 +51,13 @@ type captureReport struct {
 
 func main() {
 	var (
-		outDir   = flag.String("out_dir", "evidence_out", "output directory")
-		msgs     = flag.Int("messages", 200, "messages (round trips)")
-		size     = flag.Int("size", 256, "payload size (bytes)")
-		timeout  = flag.Duration("timeout", 30*time.Second, "overall timeout")
-		repoRoot = flag.String("repo_root", "", "repo root (default: current dir)")
+		outDir    = flag.String("out_dir", "evidence_out", "output directory")
+		msgs      = flag.Int("messages", 200, "messages (round trips)")
+		size      = flag.Int("size", 256, "payload size (bytes)")
+		timeout   = flag.Duration("timeout", 30*time.Second, "overall timeout")
+		repoRoot  = flag.String("repo_root", "", "repo root (default: current dir)")
+		sdkPadMin = flag.Int("sudoku_padding_min", 0, "sudoku padding min percentage for evidence scenarios")
+		sdkPadMax = flag.Int("sudoku_padding_max", 0, "sudoku padding max percentage for evidence scenarios")
 
 		captureIface   = flag.String("capture_iface", "", "optional: enable pcap capture on interface (e.g. lo0/en0/eth0)")
 		captureBinPath = flag.String("capture_bin", "", "optional: path to pcap-enabled iotbci-capture binary (default: auto-build with -tags pcap)")
@@ -129,15 +131,15 @@ func main() {
 		{
 			Name: "iotbci-sudoku-pure-tcp",
 			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
-				// Pure mode focuses on ASCII appearance; keep padding disabled to reduce latency/CPU for BCI workloads.
-				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, true, 0, 0, "127.0.0.1:0", ready)
+				// Pure mode focuses on ASCII appearance; default padding is disabled unless overridden by flags.
+				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, true, *sdkPadMin, *sdkPadMax, "127.0.0.1:0", ready)
 			},
 		},
 		{
 			Name: "iotbci-sudoku-packed-tcp",
 			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
-				// Packed mode aims for throughput/latency; disable padding to avoid per-byte RNG overhead.
-				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, false, 0, 0, "127.0.0.1:0", ready)
+				// Packed mode aims for throughput/latency; default padding is disabled unless overridden by flags.
+				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, false, *sdkPadMin, *sdkPadMax, "127.0.0.1:0", ready)
 			},
 		},
 		{
@@ -147,7 +149,7 @@ func main() {
 			},
 		},
 		{
-			Name: "dtls-ecdhe-ecdsa-aes128gcm",
+			Name: "dtls-ecdhe-ecdsa-aes256cbc",
 			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
 				return bench.RunDTLSCertECDHEOnUDP(ctx, cfg, "127.0.0.1:0", ready)
 			},

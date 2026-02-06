@@ -31,6 +31,7 @@ go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json
 - `wire_write_calls` / `wire_read_calls`：线上读写调用次数（外观/实现细节提示）
 - `wire_write_size_bins_log2`：写入尺寸分布（log2 bins，外观特征：长度）
 - `wire_write_interarrival_ms_bins_log2`：写入间隔分布（ms，log2 bins，外观特征：时序）
+- `wire_write_size_seq_sample` / `wire_write_interarrival_ms_seq_sample`：长度/间隔序列样本（用于协议指纹与侧写分类）
 - `wire_active_duration_ms`：首写到末写的活跃区间（ms）
 - `wire_entropy` / `wire_ascii_ratio`：对“线上 payload 字节”计算的外观指标
 - `peak_*`：峰值内存（采样近似，论文需注明采样方法与误差来源）
@@ -41,7 +42,7 @@ go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json
 - `iotbci-sudoku-pure`（纯数独：ASCII 外观优先；默认关闭 padding 以降低延迟/CPU，展示吞吐/时延上限）
 - `iotbci-sudoku-packed`（双向 6-bit packed：启用 `EnablePackedUplink`；默认关闭 padding 以展示吞吐/时延上限）
 - `pure-aead`（无数独外观层的 AEAD record，对比基线）
-- `dtls-ecdhe-ecdsa-aes128gcm`
+- `dtls-ecdhe-ecdsa-aes256cbc`
 - `mqtt-3.1.1-qos0-tls`
 - `coap-udp`
 
@@ -53,6 +54,15 @@ go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json
 
 ```bash
 go run ./cmd/iotbci-evidence -out_dir evidence_out -messages 200 -size 256 -timeout 30s
+```
+
+侧写评估可通过以下参数打开 Sudoku padding（默认 0/0）：
+
+```bash
+go run ./cmd/iotbci-evidence \
+  -out_dir evidence_out \
+  -messages 200 -size 256 -timeout 30s \
+  -sudoku_padding_min 20 -sudoku_padding_max 45
 ```
 
 启用抓包（需要 libpcap + 权限）：

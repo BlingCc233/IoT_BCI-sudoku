@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import statistics
 import subprocess
 import time
 from dataclasses import dataclass
@@ -106,6 +107,21 @@ def _max_positive(values: Iterable[float], *, default: float = 0.0) -> float:
     return float(best) if best is not None else float(default)
 
 
+def _median_num(values: Iterable[float | int]) -> float:
+    arr: list[float] = []
+    for v in values:
+        try:
+            x = float(v)
+        except Exception:  # noqa: BLE001
+            continue
+        if math.isnan(x) or math.isinf(x):
+            continue
+        arr.append(x)
+    if not arr:
+        return 0.0
+    return float(statistics.median(arr))
+
+
 def render_code_details(*, title: str, rel_path: str, content: str, max_chars: int = 80_000) -> str:
     clipped = content
     note = ""
@@ -182,6 +198,167 @@ def to_row(m: dict[str, Any]) -> MetricsRow:
     )
 
 
+def aggregate_rows_median(runs: list[list[MetricsRow]]) -> list[MetricsRow]:
+    grouped: dict[str, list[MetricsRow]] = {}
+    for rows in runs:
+        for r in rows:
+            grouped.setdefault(r.name, []).append(r)
+
+    out: list[MetricsRow] = []
+    for name, items in grouped.items():
+        first = items[0]
+        n_bins_size = len(first.write_size_bins)
+        n_bins_iat = len(first.write_iat_bins)
+        out.append(
+            MetricsRow(
+                name=name,
+                messages=int(round(_median_num((x.messages for x in items)))),
+                payload_size=int(round(_median_num((x.payload_size for x in items)))),
+                overhead_ratio=_median_num((x.overhead_ratio for x in items)),
+                avg_rtt_ms=_median_num((x.avg_rtt_ms for x in items)),
+                p95_rtt_ms=_median_num((x.p95_rtt_ms for x in items)),
+                wire_entropy=_median_num((x.wire_entropy for x in items)),
+                wire_ascii_ratio=_median_num((x.wire_ascii_ratio for x in items)),
+                peak_heap_alloc_bytes=int(round(_median_num((x.peak_heap_alloc_bytes for x in items)))),
+                peak_heap_inuse_bytes=int(round(_median_num((x.peak_heap_inuse_bytes for x in items)))),
+                peak_sys_bytes=int(round(_median_num((x.peak_sys_bytes for x in items)))),
+                wire_bps=_median_num((x.wire_bps for x in items)),
+                payload_bps=_median_num((x.payload_bps for x in items)),
+                duration_ms=_median_num((x.duration_ms for x in items)),
+                wire_write_calls=int(round(_median_num((x.wire_write_calls for x in items)))),
+                wire_read_calls=int(round(_median_num((x.wire_read_calls for x in items)))),
+                write_size_bins=[
+                    int(round(_median_num((x.write_size_bins[i] if i < len(x.write_size_bins) else 0 for x in items))))
+                    for i in range(n_bins_size)
+                ],
+                write_iat_bins=[
+                    int(round(_median_num((x.write_iat_bins[i] if i < len(x.write_iat_bins) else 0 for x in items))))
+                    for i in range(n_bins_iat)
+                ],
+            )
+        )
+    out.sort(key=lambda x: x.name)
+    return out
+
+
+def sudoku_perf_vs_dtls_mqtt(rows: list[MetricsRow]) -> list[dict[str, Any]]:
+    dtls = next((r for r in rows if "dtls" in r.name), None)
+    mqtt = next((r for r in rows if "mqtt" in r.name), None)
+    if dtls is None or mqtt is None:
+        return []
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if "iotbci-sudoku" not in r.name:
+            continue
+        rtt_ok = r.avg_rtt_ms < dtls.avg_rtt_ms and r.avg_rtt_ms < mqtt.avg_rtt_ms
+        mem_ok = r.peak_heap_inuse_bytes < dtls.peak_heap_inuse_bytes and r.peak_heap_inuse_bytes < mqtt.peak_heap_inuse_bytes
+        out.append(
+            {
+                "name": r.name,
+                "rtt_ok": rtt_ok,
+                "mem_ok": mem_ok,
+                "all_ok": rtt_ok and mem_ok,
+                "rtt": r.avg_rtt_ms,
+                "mem": r.peak_heap_inuse_bytes,
+                "dtls_rtt": dtls.avg_rtt_ms,
+                "mqtt_rtt": mqtt.avg_rtt_ms,
+                "dtls_mem": dtls.peak_heap_inuse_bytes,
+                "mqtt_mem": mqtt.peak_heap_inuse_bytes,
+            }
+        )
+    return out
+
+
+def render_perf_guard_table(guard: list[dict[str, Any]], *, title: str) -> str:
+    if not guard:
+        return ""
+    rows_html: list[str] = []
+    for g in guard:
+        rows_html.append(
+            "<tr>"
+            f"<td><code>{esc(g['name'])}</code></td>"
+            f"<td><span class=\"badge {'ok' if g['rtt_ok'] else 'warn'}\">{'PASS' if g['rtt_ok'] else 'FAIL'}</span></td>"
+            f"<td>{fmt_num(g['rtt'], digits=4)} (dtls={fmt_num(g['dtls_rtt'], digits=4)}, mqtt={fmt_num(g['mqtt_rtt'], digits=4)})</td>"
+            f"<td><span class=\"badge {'ok' if g['mem_ok'] else 'warn'}\">{'PASS' if g['mem_ok'] else 'FAIL'}</span></td>"
+            f"<td>{fmt_bytes(g['mem'])} (dtls={fmt_bytes(g['dtls_mem'])}, mqtt={fmt_bytes(g['mqtt_mem'])})</td>"
+            f"<td><span class=\"badge {'ok' if g['all_ok'] else 'warn'}\">{'PASS' if g['all_ok'] else 'FAIL'}</span></td>"
+            "</tr>"
+        )
+    return (
+        "<div class=\"card\">"
+        f"<h2>{esc(title)}</h2>"
+        "<table>"
+        "<tr><th>sudoku mode</th><th>RTT guard</th><th>RTT(ms)</th><th>Memory guard</th><th>peak_heap_inuse</th><th>overall</th></tr>"
+        + "".join(rows_html)
+        + "</table>"
+        "<div class=\"small\">Guard rule: Sudoku 的 avg_rtt 与 peak_heap_inuse 必须同时低于 DTLS 和 MQTT（overhead 可高）。</div>"
+        "</div>"
+    )
+
+
+def render_guard_stability_table(run_guards: list[tuple[str, list[dict[str, Any]]]], *, title: str) -> str:
+    if not run_guards:
+        return ""
+    scenarios: list[str] = []
+    seen: set[str] = set()
+    for _label, guard in run_guards:
+        for g in guard:
+            n = str(g.get("name") or "")
+            if n and n not in seen:
+                scenarios.append(n)
+                seen.add(n)
+    if not scenarios:
+        return ""
+
+    header = "<tr><th>run</th>" + "".join(f"<th><code>{esc(s)}</code></th>" for s in scenarios) + "<th>all pass</th></tr>"
+    rows_html: list[str] = []
+    pass_counts = {s: 0 for s in scenarios}
+    all_pass_runs = 0
+
+    for label, guard in run_guards:
+        gm = {str(x.get("name") or ""): bool(x.get("all_ok")) for x in guard}
+        row_all_ok = True
+        cells: list[str] = []
+        for s in scenarios:
+            ok = gm.get(s, False)
+            if ok:
+                pass_counts[s] += 1
+            row_all_ok = row_all_ok and ok
+            cells.append(f"<td><span class=\"badge {'ok' if ok else 'warn'}\">{'PASS' if ok else 'FAIL'}</span></td>")
+        if row_all_ok:
+            all_pass_runs += 1
+        rows_html.append(
+            "<tr>"
+            f"<td><code>{esc(label)}</code></td>"
+            + "".join(cells)
+            + f"<td><span class=\"badge {'ok' if row_all_ok else 'warn'}\">{'PASS' if row_all_ok else 'FAIL'}</span></td>"
+            "</tr>"
+        )
+
+    summary_cells = []
+    total = len(run_guards)
+    for s in scenarios:
+        summary_cells.append(f"<td>{pass_counts[s]}/{total}</td>")
+    rows_html.append(
+        "<tr>"
+        "<td><b>pass count</b></td>"
+        + "".join(summary_cells)
+        + f"<td><b>{all_pass_runs}/{total}</b></td>"
+        "</tr>"
+    )
+    return (
+        "<div class=\"card\">"
+        f"<h2>{esc(title)}</h2>"
+        "<table>"
+        + header
+        + "".join(rows_html)
+        + "</table>"
+        "<div class=\"small\">用于验证“各 benchmark 得出相同结论”：每次运行都检查 Sudoku pure/packed 是否同时满足 RTT+内存双 guard。</div>"
+        "</div>"
+    )
+
+
 _SCENARIO_INFO: dict[str, dict[str, Any]] = {
     "iotbci-sudoku-pure-tcp": {
         "what": "IoTBCI + Sudoku（pure downlink，ASCII 外观优先）",
@@ -235,11 +412,11 @@ _SCENARIO_INFO: dict[str, dict[str, Any]] = {
         ],
         "code": ["internal/bench/run_pure_aead_net.go", "pkg/iotbci/recordconn.go"],
     },
-    "dtls-ecdhe-ecdsa-aes128gcm": {
-        "what": "DTLS 基线（UDP + 证书/ECDHE + AES-128-GCM）",
+    "dtls-ecdhe-ecdsa-aes256cbc": {
+        "what": "DTLS 基线（UDP + 证书/ECDHE + AES-256-CBC）",
         "flow": [
             "UDP 回环：server ListenPacket → client DialUDP。",
-            "DTLS 握手：自签 CA 签发的证书 + ECDHE key exchange + AES-128-GCM。",
+            "DTLS 握手：自签 CA 签发的证书 + ECDHE key exchange + AES-256-CBC。",
             "业务：client 写 payload → server 读满后回显 → client 读满并校验一致性。",
         ],
         "checks": [
@@ -692,72 +869,93 @@ def main() -> int:
     go_ver = ((env["go"].get("stdout") or "") + "\n" + (env["go"].get("stderr") or "")).strip()
     py_ver = ((env["python"].get("stdout") or "") + "\n" + (env["python"].get("stderr") or "")).strip()
 
-    # 1) Run reproducible benchmarks.
-    # Use more RTTs to reduce OS noise and make results stable enough for ranking.
+    # 1) Run reproducible benchmarks (multiple repeats for stability/consistency checks).
     messages = 5000
     payload_size = 256
+    repeats = 3
     bench_path = out_dir / "bench.json"
     evidence_dir = out_dir / "evidence_out"
     evidence_json = evidence_dir / "evidence.json"
 
-    bench_cmd = [
-        "go",
-        "run",
-        "./cmd/iotbci-bench",
-        "-messages",
-        str(messages),
-        "-size",
-        str(payload_size),
-        "-timeout",
-        "60s",
-        "-out",
-        str(bench_path.relative_to(REPO_ROOT)),
-    ]
-    evidence_cmd = [
-        "go",
-        "run",
-        "./cmd/iotbci-evidence",
-        "-out_dir",
-        str(evidence_dir.relative_to(REPO_ROOT)),
-        "-messages",
-        str(messages),
-        "-size",
-        str(payload_size),
-        "-timeout",
-        "60s",
-    ]
-
-    cmd_runs = {
-        "iotbci-bench": run_cmd(bench_cmd, timeout_s=600),
-        "iotbci-evidence": run_cmd(evidence_cmd, timeout_s=900),
-    }
-
-    # 2) Load results (even if command failed, try to read any existing output).
-    bench_report: dict[str, Any] | None = None
-    if bench_path.exists():
-        bench_report = load_json(bench_path)
-    evidence_report: dict[str, Any] | None = None
-    if evidence_json.exists():
-        evidence_report = load_json(evidence_json)
-
-    bench_rows: list[MetricsRow] = []
-    if bench_report and isinstance(bench_report.get("results"), list):
-        bench_rows = [to_row(m) for m in bench_report["results"]]
-
-    evidence_rows: list[MetricsRow] = []
-    if evidence_report and isinstance(evidence_report.get("scenarios"), list):
-        evidence_rows = [to_row(sc["metrics"]) for sc in evidence_report["scenarios"]]
+    cmd_runs: dict[str, Any] = {}
+    bench_rows_runs: list[list[MetricsRow]] = []
+    evidence_rows_runs: list[list[MetricsRow]] = []
     evidence_scenarios: list[dict[str, Any]] = []
-    if evidence_report and isinstance(evidence_report.get("scenarios"), list):
-        for sc in evidence_report["scenarios"]:
-            evidence_scenarios.append(
-                {
-                    "name": sc.get("name"),
-                    "tcp_ports": sc.get("tcp_ports") or [],
-                    "udp_ports": sc.get("udp_ports") or [],
-                    "metrics": sc.get("metrics") or {},
-                }
-            )
+    run_guard_rows: list[dict[str, Any]] = []
+
+    for i in range(repeats):
+        run_id = f"run{i+1}"
+        run_bench_path = bench_path if i == 0 else out_dir / f"bench_r{i+1}.json"
+        run_evidence_dir = evidence_dir if i == 0 else out_dir / f"evidence_out_r{i+1}"
+        run_evidence_json = run_evidence_dir / "evidence.json"
+
+        bench_cmd = [
+            "go",
+            "run",
+            "./cmd/iotbci-bench",
+            "-messages",
+            str(messages),
+            "-size",
+            str(payload_size),
+            "-timeout",
+            "120s",
+            "-out",
+            str(run_bench_path.relative_to(REPO_ROOT)),
+        ]
+        evidence_cmd = [
+            "go",
+            "run",
+            "./cmd/iotbci-evidence",
+            "-out_dir",
+            str(run_evidence_dir.relative_to(REPO_ROOT)),
+            "-messages",
+            str(messages),
+            "-size",
+            str(payload_size),
+            "-timeout",
+            "120s",
+        ]
+
+        bench_run = run_cmd(bench_cmd, timeout_s=1200)
+        evidence_run = run_cmd(evidence_cmd, timeout_s=1500)
+        cmd_runs[run_id] = {"iotbci-bench": bench_run, "iotbci-evidence": evidence_run}
+
+        bench_rows_this: list[MetricsRow] = []
+        if run_bench_path.exists():
+            bench_report = load_json(run_bench_path)
+            if isinstance(bench_report.get("results"), list):
+                bench_rows_this = [to_row(m) for m in bench_report["results"]]
+        if bench_rows_this:
+            bench_rows_runs.append(bench_rows_this)
+
+        evidence_rows_this: list[MetricsRow] = []
+        if run_evidence_json.exists():
+            evidence_report = load_json(run_evidence_json)
+            if isinstance(evidence_report.get("scenarios"), list):
+                evidence_rows_this = [to_row(sc["metrics"]) for sc in evidence_report["scenarios"]]
+                if i == 0:
+                    for sc in evidence_report["scenarios"]:
+                        evidence_scenarios.append(
+                            {
+                                "name": sc.get("name"),
+                                "tcp_ports": sc.get("tcp_ports") or [],
+                                "udp_ports": sc.get("udp_ports") or [],
+                                "metrics": sc.get("metrics") or {},
+                            }
+                        )
+        if evidence_rows_this:
+            evidence_rows_runs.append(evidence_rows_this)
+
+        run_guard_rows.append(
+            {
+                "run": run_id,
+                "bench_guard": sudoku_perf_vs_dtls_mqtt(bench_rows_this),
+                "evidence_guard": sudoku_perf_vs_dtls_mqtt(evidence_rows_this),
+            }
+        )
+
+    bench_rows = aggregate_rows_median(bench_rows_runs)
+    evidence_rows = aggregate_rows_median(evidence_rows_runs)
 
     # 3) Sudoku custom-table effect analysis (解释 packed ascii_ratio 波动来源).
     pattern_info = sudoku_pattern_analysis()
@@ -766,9 +964,14 @@ def main() -> int:
     bench_scores = bci_score_rows(bench_rows)
     evidence_shortboards = sudoku_shortboard(evidence_rows)
     bench_shortboards = sudoku_shortboard(bench_rows)
+    bench_guard = sudoku_perf_vs_dtls_mqtt(bench_rows)
+    evidence_guard = sudoku_perf_vs_dtls_mqtt(evidence_rows)
+    bench_guard_runs = [(x["run"], x["bench_guard"]) for x in run_guard_rows]
+    evidence_guard_runs = [(x["run"], x["evidence_guard"]) for x in run_guard_rows]
 
     summary_obj: dict[str, Any] = {
         "generated_at": env["generated_at"],
+        "repeats": repeats,
         "commands": cmd_runs,
         "bench_json": str(bench_path.relative_to(REPO_ROOT)),
         "evidence_json": str(evidence_json.relative_to(REPO_ROOT)) if evidence_json.exists() else str(evidence_json),
@@ -778,6 +981,10 @@ def main() -> int:
         "evidence_scores": evidence_scores,
         "bench_shortboards": bench_shortboards,
         "evidence_shortboards": evidence_shortboards,
+        "bench_guard": bench_guard,
+        "evidence_guard": evidence_guard,
+        "bench_guard_runs": bench_guard_runs,
+        "evidence_guard_runs": evidence_guard_runs,
         "sudoku_pattern_analysis": pattern_info,
     }
     write_json(out_dir / "summary.json", summary_obj)
@@ -790,14 +997,16 @@ def main() -> int:
         "<div class=\"card\">"
         "<h2>目标（对齐进度计划表）</h2>"
         "<ul>"
-        f"<li>说明对比了什么：统一 payload（{payload_size}B）与消息轮次（{messages} RTT），输出 overhead/latency/吞吐/内存/外观指标。</li>"
+        f"<li>说明对比了什么：统一 payload（{payload_size}B）与消息轮次（{messages} RTT），重复运行 {repeats} 次并取中位数，输出 overhead/latency/吞吐/内存/外观指标。</li>"
         "<li>说明如何对比：给出每个协议的运行流程、验证点（为什么能证明成功），并保留一键复现命令与原始 JSON。</li>"
         "<li>说明结论：给出 Sudoku（pure/packed）的优势与代价（好在哪/坏在哪），并解释 packed 外观指标为何会波动。</li>"
+        "<li>Guard 目标：除 overhead 外，Sudoku pure/packed 在 RTT 和 peak_heap_inuse 必须同时低于 DTLS 与 MQTT。</li>"
         "</ul>"
         "<table>"
         f"<tr><th>Generated at</th><td><code>{esc(env['generated_at'])}</code></td></tr>"
         f"<tr><th>Go</th><td><code>{esc(go_ver)}</code></td></tr>"
         f"<tr><th>Python</th><td><code>{esc(py_ver)}</code></td></tr>"
+        f"<tr><th>repeats</th><td><code>{repeats}</code></td></tr>"
         f"<tr><th>bench.json</th><td><code>{esc(str(bench_path.relative_to(out_dir)))}</code></td></tr>"
         f"<tr><th>evidence.json</th><td><code>{esc(str(evidence_json.relative_to(out_dir)))}</code></td></tr>"
         "</table>"
@@ -820,6 +1029,8 @@ def main() -> int:
 
     if evidence_rows:
         body.append(metric_table(evidence_rows, title="结果（推荐）：cmd/iotbci-evidence 回环真实 socket"))
+        body.append(render_perf_guard_table(evidence_guard, title="性能 Guard（evidence 中位数）"))
+        body.append(render_guard_stability_table(evidence_guard_runs, title="性能 Guard 稳定性（evidence 每次运行）"))
         body.append(render_score_table(evidence_scores, title="综合评分（BCI score）：evidence"))
         body.append(render_shortboard_table(evidence_shortboards, title="短板效应分析：Sudoku vs MQTT/DTLS（evidence）"))
         body.append(
@@ -947,6 +1158,8 @@ def main() -> int:
 
     if bench_rows:
         body.append(metric_table(bench_rows, title="补充：cmd/iotbci-bench（部分场景用 net.Pipe 隔离 OS 噪声）"))
+        body.append(render_perf_guard_table(bench_guard, title="性能 Guard（bench 中位数）"))
+        body.append(render_guard_stability_table(bench_guard_runs, title="性能 Guard 稳定性（bench 每次运行）"))
         body.append(render_score_table(bench_scores, title="综合评分（BCI score）：bench"))
         body.append(render_shortboard_table(bench_shortboards, title="短板效应分析：Sudoku vs MQTT/DTLS（bench）"))
 
@@ -1008,7 +1221,7 @@ def main() -> int:
     body.append(render_code_details(title="bench orchestrator", rel_path="internal/bench/run_all.go", content=read_repo_text("internal/bench/run_all.go")))
     body.append(
         render_code_details(
-            title="DTLS baseline (cert/ECDHE AES-128-GCM)",
+            title="DTLS baseline (cert/ECDHE AES-256-CBC)",
             rel_path="internal/bench/run_dtls_cert.go",
             content=read_repo_text("internal/bench/run_dtls_cert.go"),
         )
@@ -1039,14 +1252,26 @@ def main() -> int:
     lines: list[str] = []
     lines.append(f"Generated at: {env['generated_at']}")
     lines.append(f"Go: {go_ver}")
+    lines.append(f"Repeats: {repeats}")
     lines.append("Outputs:")
     lines.append(f"- out/bench.json")
     lines.append(f"- out/evidence_out/evidence.json")
     lines.append("")
     lines.append("Key notes:")
     lines.append("- 推荐用 cmd/iotbci-evidence 的 loopback 结果写论文对比；micro-bench 仅作补充。")
+    lines.append("- 为减少抖动，本次每个 benchmark 重复运行并取中位数；同时给出每次运行的 Guard 稳定性表。")
     lines.append("- packed 模式的 wire_ascii_ratio 主要由 CustomTable pattern 与是否开启 padding 决定；固定 pattern 时该指标更稳定。")
     lines.append("- Sudoku 的优势是“可控外观+可调侧写特征”，代价是较高的带宽开销与实现复杂度。")
+    if bench_guard:
+        lines.append("")
+        lines.append("Guard (bench median, RTT+heap both better than DTLS/MQTT):")
+        for g in bench_guard:
+            lines.append(f"- {g['name']}: {'PASS' if g['all_ok'] else 'FAIL'}")
+    if evidence_guard:
+        lines.append("")
+        lines.append("Guard (evidence median, RTT+heap both better than DTLS/MQTT):")
+        for g in evidence_guard:
+            lines.append(f"- {g['name']}: {'PASS' if g['all_ok'] else 'FAIL'}")
     if evidence_scores:
         top = evidence_scores[0]
         lines.append("")

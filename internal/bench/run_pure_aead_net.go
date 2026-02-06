@@ -155,6 +155,8 @@ func RunPureAEADOnTCP(ctx context.Context, cfg RunConfig, method iotbci.AEADMeth
 		WireReadCalls:                 ws.readCalls,
 		WireWriteSizeBinsLog2:         ws.writeSizeBins,
 		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
 		WireActiveDurationMillis:      ws.activeDurationMillis,
 		WireEntropy:                   bs.Entropy,
 		WireASCIIRatio:                bs.ASCIIRatio,

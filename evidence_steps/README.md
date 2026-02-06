@@ -27,6 +27,7 @@ bash evidence_steps/run_all.sh
 - 03 汉明距离（Hamming-1）分析工具：`evidence_steps/03_hamming1_analysis/out/report.html`
 - 04 Go 单元测试留痕（握手/分帧/UoT/回落等）：`evidence_steps/04_go_unit_test_logs/out/report.html`
 - 05 基线对比实验留痕（DTLS/CoAP/MQTT/pure-AEAD vs IoTBCI-Sudoku）：`evidence_steps/05_baseline_comparison/out/report.html`
+- 06 协议指纹 + 侧写 + DPI/MITM 对照：`evidence_steps/06_fingerprint_sidechannel/out/report.html`
 
 新增任务（建议流程）：
 

@@ -170,6 +170,8 @@ func RunDTLSOnUDP(ctx context.Context, cfg RunConfig, psk, listenAddr string, re
 		WireReadCalls:                 ws.readCalls,
 		WireWriteSizeBinsLog2:         ws.writeSizeBins,
 		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
 		WireActiveDurationMillis:      ws.activeDurationMillis,
 		WireEntropy:                   bs.Entropy,
 		WireASCIIRatio:                bs.ASCIIRatio,
