@@ -16,9 +16,12 @@ report_out/
 evidence_tmp_run*/
 
 # Evidence steps generated artifacts
-evidence_steps/**/out/*.html
-evidence_steps/**/out/*.json
-evidence_steps/**/out/*.txt
+# Ignore all generated out artifacts by default, keep only compact summaries/reports.
+evidence_steps/**/out/**
+!evidence_steps/**/out/report.html
+!evidence_steps/**/out/summary.json
+!evidence_steps/**/out/summary.txt
+!evidence_steps/06_fingerprint_sidechannel/out/aparecium_style_protocol_features.csv
 
 # Go
 *.test
