@@ -1,0 +1,2277 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>04 Go 单元测试留痕</title>
+  <style>
+:root{
+  --bg:#ffffff;
+  --card:#ffffff;
+  --text:#111827;
+  --muted:#6b7280;
+  --accent:#2563eb;
+  --ok:#16a34a;
+  --bad:#dc2626;
+  --warn:#f59e0b;
+  --border:#e5e7eb;
+  --chip:#f3f4f6;
+  --shadow:0 6px 18px rgba(17,24,39,.08);
+  --mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --hint:#6d28d9;
+  --pad:#0ea5e9;
+  --other:#cbd5e1;
+
+  /* Protocol palette (aligned with cmd/iotbci-dashboard). */
+  --sudoku:#6d28d9;
+  --sudoku2:#a78bfa;
+  --coap:#16a34a;
+  --aead:#0ea5e9;
+  --dtls:#f97316;
+  --mqtt:#ef4444;
+  --protoOther:#64748b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.45}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.container{max-width:1180px;margin:0 auto;padding:20px 20px 48px}
+h1{font-size:20px;margin:8px 0 10px;letter-spacing:.2px}
+h2{font-size:16px;margin:0 0 10px}
+.small{color:var(--muted);font-size:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin:14px 0;box-shadow:var(--shadow)}
+pre,code{font-family:var(--mono)}
+pre{background:#f9fafb;border:1px solid var(--border);padding:12px;border-radius:12px;overflow:auto}
+code{background:rgba(17,24,39,.04);border:1px solid rgba(17,24,39,.06);padding:2px 6px;border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{border:1px solid var(--border);padding:8px 10px;vertical-align:top}
+th{text-align:left;background:#f9fafb;color:#374151}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:var(--chip);color:var(--text)}
+.badge.ok{color:var(--ok)}
+.badge.fail{color:var(--bad)}
+.badge.warn{color:var(--warn)}
+.bytes{line-height:1.9}
+.byte{display:inline-block;font-family:var(--mono);padding:1px 6px;border-radius:8px;margin:1px 2px 1px 0;border:1px solid var(--border);background:rgba(17,24,39,.02)}
+.byte.hint{background:rgba(109,40,217,.10);border-color:rgba(109,40,217,.28)}
+.byte.pad{background:rgba(14,165,233,.10);border-color:rgba(14,165,233,.28)}
+.byte.other{background:rgba(17,24,39,.02)}
+.sudoku-grid{border-collapse:separate;border-spacing:4px;margin:6px 0}
+.sudoku-grid td{width:32px;height:32px;text-align:center;font-family:var(--mono);font-size:13px;background:#f9fafb;border:1px solid var(--border);border-radius:10px}
+.sudoku-grid td.hl{background:rgba(109,40,217,.10);border-color:rgba(109,40,217,.28)}
+svg{max-width:100%;height:auto}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="small">Generated at 2026-02-06 18:10:57</div>
+    <h1>04 Go 单元测试留痕（握手/分帧/UoT/回落等）</h1><div class="card"><div class="small">目标：不仅保留 PASS/FAIL，还要回答“为什么能证明成功”。本报告对每个模块给出：<br/>1) 要证明的结论（Claims）<br/>2) 算法/机制说明（Algorithm）<br/>3) 测试过程证据（-v 输出列出具体 test）<br/>4) 支撑代码（实现与测试源码，可展开复制）</div><table><tr><th>Go version</th><td><code>go version go1.23.3 darwin/arm64</code></td></tr><tr><th>results.json</th><td><code>out/results.json</code></td></tr><tr><th>summary.txt</th><td><code>out/summary.txt</code></td></tr></table></div><div class="card"><h2>汇总</h2><table><tr><th>check</th><th>status</th><th>dur(s)</th><th>relates_to</th><th>#tests</th><th>cmd</th></tr><tr><td>Sudoku custom layout tests (obfs layer)</td><td><span class="badge ok">PASS</span></td><td>0.57</td><td>外观层编解码正确性测试 / 自定义 x/v/p</td><td>6</td><td><code>go test ./pkg/obfs/sudoku -run TestCustomLayout -count=1 -v</code></td></tr><tr><td>Handshake unit tests (Ed25519/X25519/anti-replay)</td><td><span class="badge ok">PASS</span></td><td>2.93</td><td>握手流程单元测试日志 / 抗重放</td><td>2</td><td><code>go test ./pkg/iotbci -run TestHandshake -count=1 -v</code></td></tr><tr><td>TCP stream framing (frame) tests</td><td><span class="badge ok">PASS</span></td><td>0.99</td><td>基础帧化（TCP流分帧）正确性</td><td>2</td><td><code>go test ./pkg/iotbci/frame -count=1 -v</code></td></tr><tr><td>UoT (UDP over TCP) tests</td><td><span class="badge ok">PASS</span></td><td>0.63</td><td>UoT 封装模块单测</td><td>5</td><td><code>go test ./pkg/iotbci/uot -count=1 -v</code></td></tr><tr><td>Fallback / suspicious handling tests (node)</td><td><span class="badge ok">PASS</span></td><td>0.81</td><td>回落策略触发测试 / 异常输入处理</td><td>2</td><td><code>go test ./internal/node -run TestHandleSuspicious -count=1 -v</code></td></tr></table></div><div class="card"><h2>Sudoku custom layout tests (obfs layer) <span class="badge ok">PASS</span></h2><div class="small">relates_to: 外观层编解码正确性测试 / 自定义 x/v/p</div><div class="small"><b>要证明的结论（Claims）</b></div><ul><li>自定义 x/v/p pattern 能正确解析，并生成可识别的 hint 字节（isHint）。</li><li>padding pool 通过“丢 1 个 x 位”构造，保证 padding 永远不会被误判为 hint（避免解码误收集）。</li><li>Conn 与 PackedConn 的 round-trip 在 net.Pipe 下可通过（证明编解码链路闭环）。</li></ul><div class="small"><b>采用的算法/机制（Algorithm）</b></div><ul><li>custom layout：2 个 x 位恒为 1 形成 hintMask；p(4 bits) 表示 cell position(0..15)，v(2 bits) 表示 cell value(0..3)。</li><li>decoder：只收集 isHint==true 的字节；每 4 个 hint 组成无序集合，排序后查 DecodeMap 还原 1 byte；map miss 返回 ErrInvalidSudokuMapMiss。</li><li>padding：从候选字节中“丢掉 1 个 x 位”，并要求 popcount&gt;=5，使 padding 既不被识别为 hint，又更难出现明显静态特征。</li></ul><div class="small"><b>可截图的扩展证据（Links）</b></div><ul><li><code>evidence_steps/01_sudoku_codec_validation/out/report.html (byte-&gt;4x4 全量映射+编解码过程追踪)</code></li><li><code>evidence_steps/02_padding_custom_layout/out/report.html (hint/padding 字节空间分布+统计)</code></li><li><code>evidence_steps/03_hamming1_analysis/out/report.html (汉明距离边界分析)</code></li></ul><div class="small"><b>本次运行到的测试用例（来自 -v 输出）</b></div><ul><li><code>TestCustomLayoutParsingAndPadding</code></li><li><code>TestCustomLayoutAsciiPriority</code></li><li><code>TestCustomLayoutConnRoundTrip</code></li><li><code>TestCustomLayoutPackedRoundTrip</code></li><li><code>TestCustomLayoutInvalidPatterns</code></li><li><code>TestCustomLayoutPackedStress</code></li></ul><div class="small"><code>go test ./pkg/obfs/sudoku -run TestCustomLayout -count=1 -v</code></div><details class="card"><summary><b>go test 原始输出</b></summary><pre>=== RUN   TestCustomLayoutParsingAndPadding
+--- PASS: TestCustomLayoutParsingAndPadding (0.01s)
+=== RUN   TestCustomLayoutAsciiPriority
+--- PASS: TestCustomLayoutAsciiPriority (0.00s)
+=== RUN   TestCustomLayoutConnRoundTrip
+--- PASS: TestCustomLayoutConnRoundTrip (0.00s)
+=== RUN   TestCustomLayoutPackedRoundTrip
+--- PASS: TestCustomLayoutPackedRoundTrip (0.00s)
+=== RUN   TestCustomLayoutInvalidPatterns
+--- PASS: TestCustomLayoutInvalidPatterns (0.00s)
+=== RUN   TestCustomLayoutPackedStress
+--- PASS: TestCustomLayoutPackedStress (0.00s)
+PASS
+ok  	github.com/BlingCc233/IoT_BCI-sudoku/pkg/obfs/sudoku	0.206s
+</pre></details><details class="card"><summary><b>impl source</b> — <code>pkg/obfs/sudoku/layout.go</code></summary><pre>package sudoku
+
+import (
+	&quot;fmt&quot;
+	&quot;math/bits&quot;
+	&quot;sort&quot;
+	&quot;strings&quot;
+)
+
+type byteLayout struct {
+	name        string
+	isASCII     bool
+	hintMask    byte
+	hintValue   byte
+	padMarker   byte
+	paddingPool []byte
+
+	hintOK [256]bool
+
+	encodeHint  func(value2b, pos4b byte) byte
+	encodeGroup func(group6b byte) byte
+	decodeGroup func(b byte) (byte, bool)
+}
+
+func (l *byteLayout) isHint(b byte) bool {
+	return l.hintOK[b]
+}
+
+func resolveLayout(mode string, customPattern string) (*byteLayout, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case &quot;ascii&quot;, &quot;prefer_ascii&quot;:
+		return newASCIILayout(), nil
+	case &quot;&quot;, &quot;entropy&quot;, &quot;prefer_entropy&quot;:
+		// fallthrough
+	default:
+		return nil, fmt.Errorf(&quot;invalid ascii mode: %s&quot;, mode)
+	}
+
+	if strings.TrimSpace(customPattern) != &quot;&quot; {
+		return newCustomLayout(customPattern)
+	}
+	return newEntropyLayout(), nil
+}
+
+func newASCIILayout() *byteLayout {
+	padding := make([]byte, 0, 32)
+	for i := 0; i &lt; 32; i++ {
+		padding = append(padding, byte(0x20+i))
+	}
+	l := &amp;byteLayout{
+		name:        &quot;ascii&quot;,
+		isASCII:     true,
+		hintMask:    0x40,
+		hintValue:   0x40,
+		padMarker:   0x3F,
+		paddingPool: padding,
+		encodeHint: func(value2b, pos4b byte) byte {
+			return 0x40 | ((value2b &amp; 0x03) &lt;&lt; 4) | (pos4b &amp; 0x0F)
+		},
+		encodeGroup: func(group6b byte) byte {
+			return 0x40 | (group6b &amp; 0x3F)
+		},
+		decodeGroup: func(b byte) (byte, bool) {
+			if b == &#x27;\n&#x27; {
+				return 0x3F, true
+			}
+			if (b &amp; 0x40) == 0 {
+				return 0, false
+			}
+			return b &amp; 0x3F, true
+		},
+	}
+	for i := 0; i &lt; 256; i++ {
+		b := byte(i)
+		l.hintOK[b] = (b &amp; l.hintMask) == l.hintValue
+	}
+	// In prefer_ascii mode we also accept &#x27;\n&#x27; as an on-wire alias for 0x7F.
+	l.hintOK[&#x27;\n&#x27;] = true
+	return l
+}
+
+func newEntropyLayout() *byteLayout {
+	padding := make([]byte, 0, 16)
+	for i := 0; i &lt; 8; i++ {
+		padding = append(padding, byte(0x80+i))
+		padding = append(padding, byte(0x10+i))
+	}
+	l := &amp;byteLayout{
+		name:        &quot;entropy&quot;,
+		isASCII:     false,
+		hintMask:    0x90,
+		hintValue:   0x00,
+		padMarker:   0x80,
+		paddingPool: padding,
+		encodeHint: func(value2b, pos4b byte) byte {
+			return ((value2b &amp; 0x03) &lt;&lt; 5) | (pos4b &amp; 0x0F)
+		},
+		encodeGroup: func(group6b byte) byte {
+			v := group6b &amp; 0x3F
+			return ((v &amp; 0x30) &lt;&lt; 1) | (v &amp; 0x0F)
+		},
+		decodeGroup: func(b byte) (byte, bool) {
+			if (b &amp; 0x90) != 0 {
+				return 0, false
+			}
+			return ((b &gt;&gt; 1) &amp; 0x30) | (b &amp; 0x0F), true
+		},
+	}
+	for i := 0; i &lt; 256; i++ {
+		b := byte(i)
+		l.hintOK[b] = (b &amp; l.hintMask) == l.hintValue
+	}
+	return l
+}
+
+// newCustomLayout builds a custom bit-layout for the x/v/p appearance.
+//
+// Semantic correction (IoT_BCI-sudoku):
+// - x: redundant bits (2 bits, always set for hint bytes)
+// - p: position bits (4 bits)
+// - v: value bits (2 bits)
+//
+// The pattern is 8 symbols mapping to bits 7..0. It must contain exactly:
+// - 2 x
+// - 4 p
+// - 2 v
+func newCustomLayout(pattern string) (*byteLayout, error) {
+	cleaned := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(pattern), &quot; &quot;, &quot;&quot;))
+	if len(cleaned) != 8 {
+		return nil, fmt.Errorf(&quot;custom table must have 8 symbols, got %d&quot;, len(cleaned))
+	}
+
+	var xBits, pBits, vBits []uint8
+	for i, c := range cleaned {
+		bit := uint8(7 - i)
+		switch c {
+		case &#x27;x&#x27;:
+			xBits = append(xBits, bit)
+		case &#x27;p&#x27;:
+			pBits = append(pBits, bit)
+		case &#x27;v&#x27;:
+			vBits = append(vBits, bit)
+		default:
+			return nil, fmt.Errorf(&quot;invalid char %q in custom table&quot;, c)
+		}
+	}
+	if len(xBits) != 2 || len(pBits) != 4 || len(vBits) != 2 {
+		return nil, fmt.Errorf(&quot;custom table must contain exactly 2 x, 4 p, 2 v&quot;)
+	}
+
+	xMask := byte(0)
+	for _, b := range xBits {
+		xMask |= 1 &lt;&lt; b
+	}
+
+	var posBitsLUT [16]byte
+	for pos := 0; pos &lt; 16; pos++ {
+		var out byte
+		p := byte(pos)
+		for i, bit := range pBits {
+			if (p&gt;&gt;(3-uint8(i)))&amp;0x01 == 1 {
+				out |= 1 &lt;&lt; bit
+			}
+		}
+		posBitsLUT[pos] = out
+	}
+	var valueBitsLUT [4]byte
+	for value := 0; value &lt; 4; value++ {
+		var out byte
+		v := byte(value)
+		if (v &amp; 0x02) != 0 {
+			out |= 1 &lt;&lt; vBits[0]
+		}
+		if (v &amp; 0x01) != 0 {
+			out |= 1 &lt;&lt; vBits[1]
+		}
+		valueBitsLUT[value] = out
+	}
+
+	encodeBits := func(value2b, pos4b byte, dropX int) byte {
+		out := xMask | posBitsLUT[pos4b&amp;0x0F] | valueBitsLUT[value2b&amp;0x03]
+		if dropX &gt;= 0 {
+			out &amp;^= 1 &lt;&lt; xBits[dropX]
+		}
+		return out
+	}
+
+	var encodeHintLUT [64]byte
+	for value2b := 0; value2b &lt; 4; value2b++ {
+		for pos4b := 0; pos4b &lt; 16; pos4b++ {
+			encodeHintLUT[(value2b&lt;&lt;4)|pos4b] = encodeBits(byte(value2b), byte(pos4b), -1)
+		}
+	}
+	var encodeGroupLUT [64]byte
+	for g := 0; g &lt; 64; g++ {
+		value2b := byte((g &gt;&gt; 4) &amp; 0x03)
+		pos4b := byte(g &amp; 0x0F)
+		encodeGroupLUT[g] = encodeBits(value2b, pos4b, -1)
+	}
+	var decodeGroupLUT [256]byte
+	var decodeGroupOK [256]bool
+	for b := 0; b &lt; 256; b++ {
+		bb := byte(b)
+		if (bb &amp; xMask) != xMask {
+			continue
+		}
+		var value2b, pos4b byte
+		for i, bit := range pBits {
+			if bb&amp;(1&lt;&lt;bit) != 0 {
+				pos4b |= 1 &lt;&lt; (3 - uint8(i))
+			}
+		}
+		if bb&amp;(1&lt;&lt;vBits[0]) != 0 {
+			value2b |= 0x02
+		}
+		if bb&amp;(1&lt;&lt;vBits[1]) != 0 {
+			value2b |= 0x01
+		}
+		group := (value2b &lt;&lt; 4) | (pos4b &amp; 0x0F)
+		decodeGroupLUT[b] = group
+		decodeGroupOK[b] = true
+	}
+
+	// Build a padding pool by dropping one redundant x-bit so padding bytes are never hints.
+	paddingSet := make(map[byte]struct{})
+	var padding []byte
+	for drop := range xBits {
+		for value2b := 0; value2b &lt; 4; value2b++ {
+			for pos4b := 0; pos4b &lt; 16; pos4b++ {
+				b := encodeBits(byte(value2b), byte(pos4b), drop)
+				// Hamming weight constraint: padding looks &quot;busy&quot; to reduce obvious markers.
+				if bits.OnesCount8(b) &gt;= 5 {
+					if _, ok := paddingSet[b]; !ok {
+						paddingSet[b] = struct{}{}
+						padding = append(padding, b)
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(padding, func(i, j int) bool { return padding[i] &lt; padding[j] })
+	if len(padding) == 0 {
+		return nil, fmt.Errorf(&quot;custom table produced empty padding pool&quot;)
+	}
+
+	return &amp;byteLayout{
+		name:        fmt.Sprintf(&quot;custom(%s)&quot;, cleaned),
+		isASCII:     false,
+		hintMask:    xMask,
+		hintValue:   xMask,
+		padMarker:   padding[0],
+		paddingPool: padding,
+		hintOK:      decodeGroupOK,
+		encodeHint: func(value2b, pos4b byte) byte {
+			return encodeHintLUT[((value2b&amp;0x03)&lt;&lt;4)|(pos4b&amp;0x0F)]
+		},
+		encodeGroup: func(group6b byte) byte {
+			return encodeGroupLUT[group6b&amp;0x3F]
+		},
+		decodeGroup: func(b byte) (byte, bool) {
+			if !decodeGroupOK[b] {
+				return 0, false
+			}
+			return decodeGroupLUT[b], true
+		},
+	}, nil
+}
+</pre></details><details class="card"><summary><b>impl source</b> — <code>pkg/obfs/sudoku/table.go</code></summary><pre>package sudoku
+
+import (
+	&quot;crypto/sha256&quot;
+	&quot;encoding/binary&quot;
+	&quot;errors&quot;
+	&quot;math/rand&quot;
+	&quot;sync&quot;
+	&quot;time&quot;
+)
+
+var (
+	ErrInvalidSudokuMapMiss = errors.New(&quot;sudoku: decode map miss&quot;)
+)
+
+const emptyDecodeKey uint32 = ^uint32(0)
+
+type tableCacheEntry struct {
+	once sync.Once
+	t    *Table
+	err  error
+}
+
+var (
+	tableCache sync.Map // map[cacheKey]*tableCacheEntry
+
+	comb4Once sync.Once
+	comb4     [][4]uint8
+)
+
+type Table struct {
+	EncodeTable [256][][4]byte
+	decodeKeys  []uint32
+	decodeVals  []byte
+	decodeMask  uint32
+	decodeLUT24 []uint16 // optional: 24-bit LUT (4*6bit) for fast decode (byte+1, 0=miss)
+	hintTo6     [256]byte
+	hintTo6OK   [256]bool
+	PaddingPool []byte
+	IsASCII     bool
+	layout      *byteLayout
+}
+
+var (
+	uniqueCombosOnce   sync.Once
+	uniqueCombosByGrid [][]uint16
+)
+
+const maxPuzzlesPerByte = 8
+
+// NewTable builds a table using a built-in layout (ASCII/entropy) with optional key-based rotation.
+func NewTable(key string, mode string) (*Table, error) {
+	return NewTableWithCustom(key, mode, &quot;&quot;)
+}
+
+// NewTableWithCustom builds a table using either a built-in layout or a custom x/v/p pattern.
+//
+// ASCII always wins if requested. Custom patterns are ignored when ASCII is preferred.
+func NewTableWithCustom(key string, mode string, customPattern string) (*Table, error) {
+	start := time.Now()
+
+	layout, err := resolveLayout(mode, customPattern)
+	if err != nil {
+		return nil, err
+	}
+
+	cacheKey := key + &quot;\x00&quot; + layout.name
+	entryAny, _ := tableCache.LoadOrStore(cacheKey, &amp;tableCacheEntry{})
+	entry := entryAny.(*tableCacheEntry)
+	entry.once.Do(func() {
+		entry.t, entry.err = buildTableWithLayout(key, layout)
+		if entry.err != nil {
+			tableCache.Delete(cacheKey)
+		}
+	})
+	if entry.err != nil {
+		return nil, entry.err
+	}
+	t := entry.t
+
+	_ = start // reserved for future: record init time in metrics/debug builds
+	return t, nil
+}
+
+func comb4Ref() [][4]uint8 {
+	comb4Once.Do(func() {
+		// Precompute combinations of 4 positions out of 16.
+		combinations := make([][4]uint8, 0, 1820)
+		var comb [4]uint8
+		var gen func(start, k, idx int)
+		gen = func(start, k, idx int) {
+			if k == 0 {
+				combinations = append(combinations, comb)
+				return
+			}
+			for i := start; i &lt;= 16-k; i++ {
+				comb[idx] = uint8(i)
+				gen(i+1, k-1, idx+1)
+			}
+		}
+		gen(0, 4, 0)
+		comb4 = combinations
+	})
+	return comb4
+}
+
+func buildTableWithLayout(key string, layout *byteLayout) (*Table, error) {
+	t := &amp;Table{
+		IsASCII: layout.name == &quot;ascii&quot;,
+		layout:  layout,
+	}
+	t.PaddingPool = append(t.PaddingPool, layout.paddingPool...)
+	t.buildHintTo6()
+
+	// Generate all grids and deterministically shuffle them with key.
+	allGrids := allGridsRef()
+	if len(allGrids) &lt; 256 {
+		return nil, errors.New(&quot;insufficient sudoku grids to cover 256 byte values&quot;)
+	}
+	h := sha256.Sum256([]byte(key))
+	seed := int64(binary.BigEndian.Uint64(h[:8]))
+	rng := rand.New(rand.NewSource(seed))
+
+	gridIdxs := make([]int, len(allGrids))
+	for i := range gridIdxs {
+		gridIdxs[i] = i
+	}
+	rng.Shuffle(len(gridIdxs), func(i, j int) { gridIdxs[i], gridIdxs[j] = gridIdxs[j], gridIdxs[i] })
+
+	combinations := comb4Ref()
+	uniqueByGrid := uniqueCombosByGridRef()
+
+	// Pre-size decode table for the selected grids.
+	totalEntries := 0
+	for byteVal := 0; byteVal &lt; 256; byteVal++ {
+		gi := gridIdxs[byteVal]
+		if gi &lt; 0 || gi &gt;= len(uniqueByGrid) {
+			continue
+		}
+		n := len(uniqueByGrid[gi])
+		if n &gt; maxPuzzlesPerByte {
+			n = maxPuzzlesPerByte
+		}
+		totalEntries += n
+	}
+	if totalEntries &lt;= 0 {
+		totalEntries = 256
+	}
+	// Open-addressing table sized to keep load factor &lt;= 0.5.
+	tableSize := 1
+	target := totalEntries * 2
+	for tableSize &lt; target {
+		tableSize &lt;&lt;= 1
+	}
+	if tableSize &lt; 512 {
+		tableSize = 512
+	}
+	t.decodeKeys = make([]uint32, tableSize)
+	for i := range t.decodeKeys {
+		t.decodeKeys[i] = emptyDecodeKey
+	}
+	t.decodeVals = make([]byte, tableSize)
+	t.decodeMask = uint32(tableSize - 1)
+
+	seen := make(map[uint32]byte, totalEntries)
+
+	// Build per-byte mapping.
+	for byteVal := 0; byteVal &lt; 256; byteVal++ {
+		gridIdx := gridIdxs[byteVal]
+		targetGrid := allGrids[gridIdx]
+
+		comboIdxs := uniqueByGrid[gridIdx]
+		if len(comboIdxs) &gt; maxPuzzlesPerByte {
+			comboIdxs = comboIdxs[:maxPuzzlesPerByte]
+		}
+		out := make([][4]byte, 0, len(comboIdxs))
+
+		for _, comboIdx := range comboIdxs {
+			positions := combinations[comboIdx]
+
+			var encoded [4]byte
+			for i, p := range positions {
+				// pos: 0..15, val: 1..4 (stored as 0..3 in encoding).
+				encoded[i] = t.layout.encodeHint(targetGrid[p]-1, p)
+			}
+			// Keep hints in ascending order so decoders can pack without per-byte sorting.
+			if encoded[0] &gt; encoded[1] {
+				encoded[0], encoded[1] = encoded[1], encoded[0]
+			}
+			if encoded[2] &gt; encoded[3] {
+				encoded[2], encoded[3] = encoded[3], encoded[2]
+			}
+			if encoded[0] &gt; encoded[2] {
+				encoded[0], encoded[2] = encoded[2], encoded[0]
+			}
+			if encoded[1] &gt; encoded[3] {
+				encoded[1], encoded[3] = encoded[3], encoded[1]
+			}
+			if encoded[1] &gt; encoded[2] {
+				encoded[1], encoded[2] = encoded[2], encoded[1]
+			}
+			out = append(out, encoded)
+
+			key := uint32(encoded[0])&lt;&lt;24 | uint32(encoded[1])&lt;&lt;16 | uint32(encoded[2])&lt;&lt;8 | uint32(encoded[3])
+			if prev, ok := seen[key]; ok &amp;&amp; prev != byte(byteVal) {
+				return nil, errors.New(&quot;sudoku: decode key collision&quot;)
+			}
+			seen[key] = byte(byteVal)
+			t.decodeInsert(key, byte(byteVal))
+		}
+
+		t.EncodeTable[byteVal] = out
+	}
+
+	// Optional: accelerate decode for ASCII-pure scenarios.
+	// This uses an off-heap 16MiB lookup table indexed by 4*6-bit hint IDs.
+	if t.IsASCII {
+		if err := t.buildDecodeLUT24(seen); err != nil {
+			return nil, err
+		}
+	}
+	return t, nil
+}
+
+func decodeHash32(x uint32) uint32 {
+	// A small 32-bit mixer (similar spirit to murmur finalizer).
+	x ^= x &gt;&gt; 16
+	x *= 0x7feb352d
+	x ^= x &gt;&gt; 15
+	x *= 0x846ca68b
+	x ^= x &gt;&gt; 16
+	return x
+}
+
+func (t *Table) decodeInsert(key uint32, val byte) {
+	if t == nil || len(t.decodeKeys) == 0 {
+		return
+	}
+	mask := t.decodeMask
+	idx := decodeHash32(key) &amp; mask
+	for {
+		k := t.decodeKeys[idx]
+		if k == emptyDecodeKey || k == key {
+			t.decodeKeys[idx] = key
+			t.decodeVals[idx] = val
+			return
+		}
+		idx = (idx + 1) &amp; mask
+	}
+}
+
+func (t *Table) Decode(key uint32) (byte, bool) {
+	if t != nil &amp;&amp; len(t.decodeLUT24) == 1&lt;&lt;24 {
+		b0 := byte(key &gt;&gt; 24)
+		b1 := byte(key &gt;&gt; 16)
+		b2 := byte(key &gt;&gt; 8)
+		b3 := byte(key)
+		i0, i1, i2, i3 := t.hintTo6[b0], t.hintTo6[b1], t.hintTo6[b2], t.hintTo6[b3]
+		// In ASCII mode, keys are always hints; keep a fallback for safety.
+		if t.hintTo6OK[b0] &amp;&amp; t.hintTo6OK[b1] &amp;&amp; t.hintTo6OK[b2] &amp;&amp; t.hintTo6OK[b3] {
+			idx := (uint32(i0) &lt;&lt; 18) | (uint32(i1) &lt;&lt; 12) | (uint32(i2) &lt;&lt; 6) | uint32(i3)
+			v := t.decodeLUT24[idx]
+			if v != 0 {
+				return byte(v - 1), true
+			}
+			return 0, false
+		}
+	}
+
+	if t == nil || len(t.decodeKeys) == 0 {
+		return 0, false
+	}
+	mask := t.decodeMask
+	idx := decodeHash32(key) &amp; mask
+	for {
+		k := t.decodeKeys[idx]
+		if k == key {
+			return t.decodeVals[idx], true
+		}
+		if k == emptyDecodeKey {
+			return 0, false
+		}
+		idx = (idx + 1) &amp; mask
+	}
+}
+
+func (t *Table) buildHintTo6() {
+	if t == nil || t.layout == nil {
+		return
+	}
+	// Canonical 6-bit ID is (value2b&lt;&lt;4 | pos4b). This is stable across layouts.
+	for value2b := byte(0); value2b &lt; 4; value2b++ {
+		for pos4b := byte(0); pos4b &lt; 16; pos4b++ {
+			b := t.layout.encodeHint(value2b, pos4b)
+			id := (value2b &lt;&lt; 4) | (pos4b &amp; 0x0F)
+			t.hintTo6[b] = id
+			t.hintTo6OK[b] = true
+		}
+	}
+	// In prefer_ascii mode we also accept &#x27;\n&#x27; as an on-wire alias for 0x7F.
+	if t.IsASCII {
+		t.hintTo6[&#x27;\n&#x27;] = t.hintTo6[0x7F]
+		t.hintTo6OK[&#x27;\n&#x27;] = true
+	}
+}
+
+func uniqueCombosByGridRef() [][]uint16 {
+	uniqueCombosOnce.Do(func() {
+		allGrids := allGridsRef()
+		combinations := comb4Ref()
+		if len(allGrids) == 0 || len(combinations) == 0 {
+			uniqueCombosByGrid = nil
+			return
+		}
+
+		patternCount := len(combinations) &lt;&lt; 8 // 256 value patterns per combination.
+		counts := make([]uint16, patternCount)
+		firstGrid := make([]uint16, patternCount)
+
+		for gi, g := range allGrids {
+			for ci, positions := range combinations {
+				id := hintPatternID(ci, positions, g)
+				if counts[id] == 0 {
+					firstGrid[id] = uint16(gi)
+				}
+				if counts[id] &lt; ^uint16(0) {
+					counts[id]++
+				}
+			}
+		}
+
+		uniqueCombosByGrid = make([][]uint16, len(allGrids))
+		for id, c := range counts {
+			if c != 1 {
+				continue
+			}
+			gi := firstGrid[id]
+			comb := uint16(id &gt;&gt; 8)
+			uniqueCombosByGrid[gi] = append(uniqueCombosByGrid[gi], comb)
+		}
+	})
+	return uniqueCombosByGrid
+}
+
+func hintPatternID(comboIdx int, positions [4]uint8, g Grid) int {
+	p0, p1, p2, p3 := positions[0], positions[1], positions[2], positions[3]
+	v0 := (g[p0] - 1) &amp; 0x03
+	v1 := (g[p1] - 1) &amp; 0x03
+	v2 := (g[p2] - 1) &amp; 0x03
+	v3 := (g[p3] - 1) &amp; 0x03
+	valCode := int(v0)&lt;&lt;6 | int(v1)&lt;&lt;4 | int(v2)&lt;&lt;2 | int(v3)
+	return (comboIdx &lt;&lt; 8) | valCode
+}
+</pre></details><details class="card"><summary><b>impl source</b> — <code>pkg/obfs/sudoku/conn.go</code></summary><pre>package sudoku
+
+import (
+	&quot;bufio&quot;
+	&quot;bytes&quot;
+	&quot;errors&quot;
+	&quot;net&quot;
+	&quot;sync&quot;
+)
+
+const IOBufferSize = 32 * 1024
+
+type Conn struct {
+	net.Conn
+	table  *Table
+	reader *bufio.Reader
+
+	recorder   *bytes.Buffer
+	recording  bool
+	recordLock sync.Mutex
+
+	rawBuf      []byte
+	pendingData []byte
+	hintBuf     [4]byte
+	hintCount   int
+
+	rng          fastRNG
+	paddingRate  float32
+	padThreshold uint32
+	padPool      []byte
+	padLen       int
+
+	writeMu  sync.Mutex
+	writeBuf []byte
+}
+
+func NewConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int, record bool) *Conn {
+	localRng := newFastRNG()
+
+	min := float32(paddingMinPct) / 100.0
+	rngRange := float32(paddingMaxPct-paddingMinPct) / 100.0
+	rate := min + localRng.Float32()*rngRange
+	threshold := func() uint32 {
+		if rate &lt;= 0 {
+			return 0
+		}
+		if rate &gt;= 1 {
+			return ^uint32(0)
+		}
+		return uint32(float64(rate) * 4294967295.0)
+	}()
+
+	sc := &amp;Conn{
+		Conn:         c,
+		table:        table,
+		reader:       bufio.NewReaderSize(c, IOBufferSize),
+		rawBuf:       make([]byte, IOBufferSize),
+		pendingData:  make([]byte, 0, IOBufferSize/4),
+		rng:          localRng,
+		paddingRate:  rate,
+		padThreshold: threshold,
+		padPool:      table.PaddingPool,
+		padLen:       len(table.PaddingPool),
+		writeBuf:     make([]byte, 0, 4096),
+	}
+	if record {
+		sc.recorder = new(bytes.Buffer)
+		sc.recording = true
+	}
+	return sc
+}
+
+func (sc *Conn) CloseWrite() error {
+	if sc == nil || sc.Conn == nil {
+		return nil
+	}
+	if cw, ok := sc.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return nil
+}
+
+func (sc *Conn) CloseRead() error {
+	if sc == nil || sc.Conn == nil {
+		return nil
+	}
+	if cr, ok := sc.Conn.(interface{ CloseRead() error }); ok {
+		return cr.CloseRead()
+	}
+	return nil
+}
+
+func (sc *Conn) StopRecording() {
+	sc.recordLock.Lock()
+	sc.recording = false
+	sc.recorder = nil
+	sc.recordLock.Unlock()
+}
+
+func (sc *Conn) GetBufferedAndRecorded() []byte {
+	if sc == nil {
+		return nil
+	}
+
+	sc.recordLock.Lock()
+	defer sc.recordLock.Unlock()
+
+	var recorded []byte
+	if sc.recorder != nil {
+		recorded = sc.recorder.Bytes()
+	}
+
+	buffered := sc.reader.Buffered()
+	if buffered &lt;= 0 {
+		return recorded
+	}
+	peeked, _ := sc.reader.Peek(buffered)
+	full := make([]byte, 0, len(recorded)+len(peeked))
+	full = append(full, recorded...)
+	full = append(full, peeked...)
+	return full
+}
+
+func (sc *Conn) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
+
+	pads := sc.padPool
+	padLen := sc.padLen
+	rng := &amp;sc.rng
+	padThreshold := sc.padThreshold
+	encodeTable := &amp;sc.table.EncodeTable
+	hasPadding := padThreshold != 0 &amp;&amp; padLen &gt; 0
+
+	needed := len(p)*4 + 16
+	if hasPadding {
+		needed = len(p)*6 + 16
+	}
+	if cap(sc.writeBuf) &lt; needed {
+		sc.writeBuf = make([]byte, 0, needed)
+	}
+	out := sc.writeBuf[:0]
+
+	if !hasPadding {
+		outLen := len(p) * 4
+		out = sc.writeBuf[:outLen]
+		oi := 0
+		puzzleIdx := rng.Uint32() &amp; 7
+		for _, b := range p {
+			puzzles := (*encodeTable)[b]
+			puzzle := puzzles[int(puzzleIdx)]
+			puzzleIdx = (puzzleIdx + 1) &amp; 7
+			out[oi] = puzzle[0]
+			out[oi+1] = puzzle[1]
+			out[oi+2] = puzzle[2]
+			out[oi+3] = puzzle[3]
+			oi += 4
+		}
+		_, err := sc.Conn.Write(out)
+		sc.writeBuf = out[:0]
+		return len(p), err
+	}
+
+	for _, b := range p {
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+
+		puzzles := (*encodeTable)[b]
+		puzzle := puzzles[int(rng.Uint32()&amp;7)]
+
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+		out = append(out, puzzle[0])
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+		out = append(out, puzzle[1])
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+		out = append(out, puzzle[2])
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+		out = append(out, puzzle[3])
+	}
+
+	if rng.Uint32() &lt;= padThreshold {
+		out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+	}
+
+	_, err := sc.Conn.Write(out)
+	sc.writeBuf = out[:0]
+	return len(p), err
+}
+
+func (sc *Conn) Read(p []byte) (int, error) {
+	if len(sc.pendingData) &gt; 0 {
+		n := copy(p, sc.pendingData)
+		if n == len(sc.pendingData) {
+			sc.pendingData = sc.pendingData[:0]
+		} else {
+			sc.pendingData = sc.pendingData[n:]
+		}
+		return n, nil
+	}
+
+	hasPadding := sc.padThreshold != 0 &amp;&amp; sc.padLen &gt; 0
+
+	for {
+		if len(sc.pendingData) &gt;= len(p) {
+			break
+		}
+
+		nr, rErr := sc.reader.Read(sc.rawBuf)
+		if nr &gt; 0 {
+			chunk := sc.rawBuf[:nr]
+			sc.recordLock.Lock()
+			if sc.recording {
+				sc.recorder.Write(chunk)
+			}
+			sc.recordLock.Unlock()
+
+			if !hasPadding {
+				// Fast path: in no-padding mode, every wire byte is a hint and every 4 hints decode to 1 byte.
+				need := (nr+sc.hintCount)/4 + 16
+				if cap(sc.pendingData)-len(sc.pendingData) &lt; need {
+					newCap := len(sc.pendingData) + need
+					buf := make([]byte, len(sc.pendingData), newCap)
+					copy(buf, sc.pendingData)
+					sc.pendingData = buf
+				}
+
+				i := 0
+				if sc.hintCount != 0 {
+					for sc.hintCount &lt; 4 &amp;&amp; i &lt; len(chunk) {
+						sc.hintBuf[sc.hintCount] = chunk[i]
+						sc.hintCount++
+						i++
+					}
+					if sc.hintCount == 4 {
+						key := uint32(sc.hintBuf[0])&lt;&lt;24 | uint32(sc.hintBuf[1])&lt;&lt;16 | uint32(sc.hintBuf[2])&lt;&lt;8 | uint32(sc.hintBuf[3])
+						val, ok := sc.table.Decode(key)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						sc.pendingData = append(sc.pendingData, val)
+						sc.hintCount = 0
+					}
+				}
+
+				rem := chunk[i:]
+				full := len(rem) &amp;^ 3
+				decoded := full / 4
+				if decoded &gt; 0 {
+					start := len(sc.pendingData)
+					sc.pendingData = sc.pendingData[:start+decoded]
+					di := start
+					for j := 0; j &lt; full; j += 4 {
+						key := uint32(rem[j])&lt;&lt;24 | uint32(rem[j+1])&lt;&lt;16 | uint32(rem[j+2])&lt;&lt;8 | uint32(rem[j+3])
+						val, ok := sc.table.Decode(key)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						sc.pendingData[di] = val
+						di++
+					}
+				}
+
+				tail := rem[full:]
+				copy(sc.hintBuf[:], tail)
+				sc.hintCount = len(tail)
+			} else {
+				// Conservative: worst-case all bytes are hints -&gt; 4 hints per decoded byte.
+				if cap(sc.pendingData)-len(sc.pendingData) &lt; (nr/4)+16 {
+					newCap := len(sc.pendingData) + (nr / 4) + 16
+					buf := make([]byte, len(sc.pendingData), newCap)
+					copy(buf, sc.pendingData)
+					sc.pendingData = buf
+				}
+
+				layout := sc.table.layout
+				for _, b := range chunk {
+					if !layout.isHint(b) {
+						continue
+					}
+
+					sc.hintBuf[sc.hintCount] = b
+					sc.hintCount++
+					if sc.hintCount == 4 {
+						key := uint32(sc.hintBuf[0])&lt;&lt;24 | uint32(sc.hintBuf[1])&lt;&lt;16 | uint32(sc.hintBuf[2])&lt;&lt;8 | uint32(sc.hintBuf[3])
+						val, ok := sc.table.Decode(key)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						sc.pendingData = append(sc.pendingData, val)
+						sc.hintCount = 0
+					}
+				}
+			}
+		}
+		if rErr != nil {
+			if errors.Is(rErr, net.ErrClosed) &amp;&amp; len(sc.pendingData) &gt; 0 {
+				break
+			}
+			return 0, rErr
+		}
+		if len(sc.pendingData) &gt;= len(p) {
+			break
+		}
+	}
+
+	n := copy(p, sc.pendingData)
+	if n == len(sc.pendingData) {
+		sc.pendingData = sc.pendingData[:0]
+	} else {
+		sc.pendingData = sc.pendingData[n:]
+	}
+	return n, nil
+}
+</pre></details><details class="card"><summary><b>tests source</b> — <code>pkg/obfs/sudoku/custom_layout_test.go</code></summary><pre>package sudoku
+
+import (
+	&quot;bytes&quot;
+	&quot;io&quot;
+	&quot;math/bits&quot;
+	&quot;net&quot;
+	&quot;testing&quot;
+)
+
+func TestCustomLayoutParsingAndPadding(t *testing.T) {
+	table, err := NewTableWithCustom(&quot;seed-custom&quot;, &quot;prefer_entropy&quot;, &quot;xppppxvv&quot;)
+	if err != nil {
+		t.Fatalf(&quot;failed to build table: %v&quot;, err)
+	}
+	if table.IsASCII {
+		t.Fatalf(&quot;custom table should not be marked ASCII&quot;)
+	}
+	if table.layout == nil || table.layout.hintMask == 0 {
+		t.Fatalf(&quot;layout mask not initialized&quot;)
+	}
+
+	for _, b := range table.PaddingPool {
+		if table.layout.isHint(b) {
+			t.Fatalf(&quot;padding byte incorrectly recognized as hint: %08b&quot;, b)
+		}
+		if bits.OnesCount8(b) &lt; 5 {
+			t.Fatalf(&quot;padding hamming weight too low: %d&quot;, bits.OnesCount8(b))
+		}
+	}
+}
+
+func TestCustomLayoutAsciiPriority(t *testing.T) {
+	table, err := NewTableWithCustom(&quot;seed-custom&quot;, &quot;prefer_ascii&quot;, &quot;xppppxvv&quot;)
+	if err != nil {
+		t.Fatalf(&quot;failed to build ascii-preferred table: %v&quot;, err)
+	}
+	if !table.IsASCII {
+		t.Fatalf(&quot;ascii preference should override custom pattern&quot;)
+	}
+	if table.layout.name != &quot;ascii&quot; {
+		t.Fatalf(&quot;expected ascii layout, got %s&quot;, table.layout.name)
+	}
+}
+
+func TestCustomLayoutConnRoundTrip(t *testing.T) {
+	table, err := NewTableWithCustom(&quot;roundtrip&quot;, &quot;prefer_entropy&quot;, &quot;xppppxvv&quot;)
+	if err != nil {
+		t.Fatalf(&quot;table creation failed: %v&quot;, err)
+	}
+
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	defer c2.Close()
+
+	writer := NewConn(c1, table, 0, 0, false)
+	reader := NewConn(c2, table, 0, 0, false)
+
+	payload := bytes.Repeat([]byte(&quot;sudoku-custom-layout&quot;), 2048)
+	done := make(chan error, 1)
+	go func() {
+		_, err := writer.Write(payload)
+		done &lt;- err
+	}()
+
+	buf := make([]byte, len(payload))
+	if _, err := io.ReadFull(reader, buf); err != nil {
+		t.Fatalf(&quot;read failed: %v&quot;, err)
+	}
+	if err := &lt;-done; err != nil {
+		t.Fatalf(&quot;write failed: %v&quot;, err)
+	}
+	if !bytes.Equal(payload, buf) {
+		t.Fatalf(&quot;payload mismatch&quot;)
+	}
+}
+
+func TestCustomLayoutPackedRoundTrip(t *testing.T) {
+	table, err := NewTableWithCustom(&quot;packed-roundtrip&quot;, &quot;prefer_entropy&quot;, &quot;xppppxvv&quot;)
+	if err != nil {
+		t.Fatalf(&quot;table creation failed: %v&quot;, err)
+	}
+
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	defer c2.Close()
+
+	writer := NewPackedConn(c1, table, 0, 0)
+	reader := NewPackedConn(c2, table, 0, 0)
+
+	payload := bytes.Repeat([]byte{0xAB, 0xCD, 0xEF, 0x01}, 8192)
+	done := make(chan error, 1)
+	go func() {
+		if _, err := writer.Write(payload); err != nil {
+			done &lt;- err
+			return
+		}
+		done &lt;- writer.Flush()
+	}()
+
+	buf := make([]byte, len(payload))
+	if _, err := io.ReadFull(reader, buf); err != nil {
+		t.Fatalf(&quot;read failed: %v&quot;, err)
+	}
+	if err := &lt;-done; err != nil {
+		t.Fatalf(&quot;write/flush failed: %v&quot;, err)
+	}
+	if !bytes.Equal(payload, buf) {
+		t.Fatalf(&quot;payload mismatch&quot;)
+	}
+}
+
+func TestCustomLayoutInvalidPatterns(t *testing.T) {
+	if _, err := NewTableWithCustom(&quot;seed&quot;, &quot;prefer_entropy&quot;, &quot;xxxxppvv&quot;); err == nil {
+		t.Fatalf(&quot;expected error for invalid pattern&quot;)
+	}
+	if _, err := NewTableWithCustom(&quot;seed&quot;, &quot;badmode&quot;, &quot;xppppxvv&quot;); err == nil {
+		t.Fatalf(&quot;expected error for invalid ascii mode&quot;)
+	}
+}
+
+func TestCustomLayoutPackedStress(t *testing.T) {
+	table, err := NewTableWithCustom(&quot;stress-key&quot;, &quot;prefer_entropy&quot;, &quot;vppxppvx&quot;)
+	if err != nil {
+		t.Fatalf(&quot;table creation failed: %v&quot;, err)
+	}
+
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	defer c2.Close()
+
+	writer := NewPackedConn(c1, table, 2, 4)
+	reader := NewPackedConn(c2, table, 2, 4)
+
+	payload := bytes.Repeat([]byte{0xFF, 0x00, 0x7F, 0x11, 0x22}, 20000) // ~100KB stress payload
+	done := make(chan error, 1)
+	go func() {
+		if _, err := writer.Write(payload); err != nil {
+			done &lt;- err
+			return
+		}
+		done &lt;- writer.Flush()
+	}()
+
+	buf := make([]byte, len(payload))
+	if _, err := io.ReadFull(reader, buf); err != nil {
+		t.Fatalf(&quot;read failed: %v&quot;, err)
+	}
+	if err := &lt;-done; err != nil {
+		t.Fatalf(&quot;write/flush failed: %v&quot;, err)
+	}
+	if !bytes.Equal(payload, buf) {
+		t.Fatalf(&quot;stress payload mismatch&quot;)
+	}
+}
+</pre></details><details class="card"><summary><b>docs source</b> — <code>doc/OBFS_SUDOKU.md</code></summary><pre># Sudoku Appearance Layer
+
+This layer provides:
+
+- 1 byte plaintext -&gt; 4 hint bytes (order permuted)
+- Arbitrary padding bytes inserted between hints
+- Optional packed mode: 6-bit groups -&gt; 1 hint byte (+ pad marker), for throughput-first profiles
+- ASCII preference or entropy preference
+- Custom x/v/p bit-layout table (semantic corrected):
+  - `x`: redundant bits (2 bits)
+  - `p`: position bits (4 bits)
+  - `v`: value bits (2 bits)
+
+Implementation: `pkg/obfs/sudoku`.
+
+## Packed 模式（6-bit groups）
+
+除了 “1 byte -&gt; 4 hints” 的纯数独编解码外，本仓库还提供 `PackedConn`（`pkg/obfs/sudoku/packed.go`）：
+
+- 写入路径：按 6-bit 分组，将每组编码为 1 个 hint byte（更接近 base64 风格，但仍受 layout.isHint/自定义 x/v/p 外观控制）
+- 读出路径：跳过 padding，按组还原回字节流
+- 适合与 AEAD ciphertext 叠加，用于吞吐/时延优先的 profile
+
+在 `pkg/iotbci` 中可通过 `ObfsOptions.EnablePackedUplink` 打开 uplink（client-&gt;server）打包；与 `EnablePureDownlink=false` 组合时即为双向 packed。
+
+## 自定义 x/v/p 外观（语义纠错说明）
+
+原版 Sudoku 的自定义字段描述存在语义混淆。本仓库在实现层面按以下语义固定：
+
+- `x`：冗余位（2 bits），用于构造 hint byte 的“恒定标记位”（layout.isHint 依赖）。
+- `p`：位置位（4 bits），编码 4x4 网格中的 cell position（0..15）。
+- `v`：值位（2 bits），编码 cell value（0..3 对应原 Sudoku 值 1..4）。
+
+### Pattern 规则
+
+- pattern 长度固定 8（对应一个字节的 bit7..bit0）
+- 必须且仅能包含：
+  - 2 个 `x`
+  - 4 个 `p`
+  - 2 个 `v`
+
+示例：`xppppxvv`、`vppxppvx`
+
+实现：`pkg/obfs/sudoku/layout.go:newCustomLayout`
+
+## 鲁棒性约束
+
+- 解码器只识别 layout.isHint 的字节作为 hint；其余全部视为 padding/噪声并跳过。
+- 每 4 个 hint 组成一个无序集合，通过排序网络生成 key 并查表解码（避免因乱序导致歧义）。
+- 对 map miss 直接返回错误（上层应触发可疑流量路径，避免状态机资源耗尽）。
+</pre></details></div><div class="card"><h2>Handshake unit tests (Ed25519/X25519/anti-replay) <span class="badge ok">PASS</span></h2><div class="small">relates_to: 握手流程单元测试日志 / 抗重放</div><div class="small"><b>要证明的结论（Claims）</b></div><ul><li>握手完成后双方获得可用的安全连接（能在 net.Pipe 上读写应用数据）。</li><li>服务端能从握手元信息中识别对端身份（PeerSubject）。</li><li>重放检测可拒绝“相同随机数/nonce 的第二次握手”（ErrReplayDetected）。</li></ul><div class="small"><b>采用的算法/机制（Algorithm）</b></div><ul><li>身份：证书由 master key 签发；握手期验证证书与身份字段。</li><li>密钥：握手阶段生成随机数/nonce 与临时密钥交换材料，派生握手与会话 AEAD key。</li><li>抗重放：ReplayCache 对 token 做 sha256 后在窗口内判重；容量满用 ring eviction 保持小内存可控。</li></ul><div class="small"><b>可截图的扩展证据（Links）</b></div><ul><li><code>doc/HANDSHAKE.md</code></li><li><code>pkg/iotbci/replay.go</code></li></ul><div class="small"><b>本次运行到的测试用例（来自 -v 输出）</b></div><ul><li><code>TestHandshakeRoundTrip_PureDownlink</code></li><li><code>TestHandshakeReplayDetected</code></li></ul><div class="small"><code>go test ./pkg/iotbci -run TestHandshake -count=1 -v</code></div><details class="card"><summary><b>go test 原始输出</b></summary><pre>=== RUN   TestHandshakeRoundTrip_PureDownlink
+--- PASS: TestHandshakeRoundTrip_PureDownlink (0.01s)
+=== RUN   TestHandshakeReplayDetected
+--- PASS: TestHandshakeReplayDetected (2.00s)
+PASS
+ok  	github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci	2.392s
+</pre></details><details class="card"><summary><b>impl source</b> — <code>pkg/iotbci/replay.go</code></summary><pre>package iotbci
+
+import (
+	&quot;crypto/sha256&quot;
+	&quot;sync&quot;
+	&quot;time&quot;
+)
+
+// ReplayCache is a bounded, time-windowed cache for replay detection.
+//
+// Memory is bounded by maxEntries; when full, it evicts in insertion order (ring).
+// This is intentionally simple to keep small-memory devices predictable.
+type ReplayCache struct {
+	mu         sync.Mutex
+	window     time.Duration
+	maxEntries int
+
+	ring []replayEntry
+	next int
+
+	seen map[[32]byte]int64 // token -&gt; expiresAt (unix nano)
+}
+
+type replayEntry struct {
+	token     [32]byte
+	expiresAt int64
+}
+
+func NewReplayCache(maxEntries int, window time.Duration) *ReplayCache {
+	if maxEntries &lt;= 0 {
+		maxEntries = 1024
+	}
+	if window &lt;= 0 {
+		window = 2 * time.Minute
+	}
+	return &amp;ReplayCache{
+		window:     window,
+		maxEntries: maxEntries,
+		ring:       make([]replayEntry, maxEntries),
+		seen:       make(map[[32]byte]int64, maxEntries),
+	}
+}
+
+// SeenOrAdd returns true if token has been seen within the replay window.
+// Otherwise it records the token and returns false.
+func (c *ReplayCache) SeenOrAdd(token []byte, now time.Time) bool {
+	if c == nil {
+		return false
+	}
+	sum := sha256.Sum256(token)
+	nowN := now.UnixNano()
+	exp := now.Add(c.window).UnixNano()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if expiresAt, ok := c.seen[sum]; ok &amp;&amp; expiresAt &gt; nowN {
+		return true
+	}
+
+	// Evict current ring entry if occupied.
+	ev := c.ring[c.next]
+	if ev.expiresAt != 0 {
+		if curExp, ok := c.seen[ev.token]; ok &amp;&amp; curExp == ev.expiresAt {
+			delete(c.seen, ev.token)
+		}
+	}
+
+	c.ring[c.next] = replayEntry{token: sum, expiresAt: exp}
+	c.next++
+	if c.next &gt;= len(c.ring) {
+		c.next = 0
+	}
+	c.seen[sum] = exp
+
+	return false
+}
+</pre></details><details class="card"><summary><b>tests source</b> — <code>pkg/iotbci/handshake_test.go</code></summary><pre>package iotbci
+
+import (
+	&quot;context&quot;
+	&quot;crypto/ed25519&quot;
+	&quot;crypto/rand&quot;
+	&quot;errors&quot;
+	&quot;io&quot;
+	&quot;net&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+)
+
+type repeatReader struct {
+	b byte
+}
+
+func (r repeatReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = r.b
+	}
+	return len(p), nil
+}
+
+func issueTestCert(t *testing.T, issuerPriv ed25519.PrivateKey, subject string, subjectPub ed25519.PublicKey, serial uint64) *Cert {
+	t.Helper()
+	now := time.Now()
+	c, err := IssueCert(issuerPriv, subject, subjectPub, now.Add(-time.Hour), now.Add(24*time.Hour), serial)
+	if err != nil {
+		t.Fatalf(&quot;issue cert: %v&quot;, err)
+	}
+	return c
+}
+
+func TestHandshakeRoundTrip_PureDownlink(t *testing.T) {
+	masterPub, masterPriv, _ := ed25519.GenerateKey(rand.Reader)
+	serverPub, serverPriv, _ := ed25519.GenerateKey(rand.Reader)
+	clientPub, clientPriv, _ := ed25519.GenerateKey(rand.Reader)
+
+	serverCert := issueTestCert(t, masterPriv, &quot;server-1&quot;, serverPub, 1)
+	clientCert := issueTestCert(t, masterPriv, &quot;device-1&quot;, clientPub, 2)
+
+	psk := &quot;test-psk-1&quot;
+
+	serverOpts := &amp;ServerOptions{
+		Obfs: ObfsOptions{
+			ASCII:              &quot;prefer_entropy&quot;,
+			CustomTables:       []string{&quot;xppppxvv&quot;, &quot;vppxppvx&quot;},
+			PaddingMin:         0,
+			PaddingMax:         0,
+			EnablePureDownlink: true,
+		},
+		Security: SecurityOptions{
+			PSK:              psk,
+			HandshakeAEAD:    AEADChaCha20Poly1305,
+			SessionAEAD:      AEADChaCha20Poly1305,
+			HandshakeTimeout: 2 * time.Second,
+			TimeSkew:         2 * time.Minute,
+			MaxHandshakeSize: 8 * 1024,
+			ReplayWindow:     5 * time.Minute,
+			ReplayCacheSize:  128,
+		},
+		Identity: IdentityOptions{
+			MasterPublicKey: masterPub,
+			LocalCert:       serverCert,
+			LocalPrivateKey: serverPriv,
+		},
+	}
+	clientOpts := &amp;ClientOptions{
+		Obfs: ObfsOptions{
+			ASCII:              &quot;prefer_entropy&quot;,
+			CustomTables:       []string{&quot;xppppxvv&quot;, &quot;vppxppvx&quot;},
+			PaddingMin:         0,
+			PaddingMax:         0,
+			EnablePureDownlink: true,
+		},
+		Security: SecurityOptions{
+			PSK:              psk,
+			HandshakeAEAD:    AEADChaCha20Poly1305,
+			SessionAEAD:      AEADChaCha20Poly1305,
+			HandshakeTimeout: 2 * time.Second,
+			TimeSkew:         2 * time.Minute,
+			MaxHandshakeSize: 8 * 1024,
+		},
+		Identity: IdentityOptions{
+			MasterPublicKey: masterPub,
+			LocalCert:       clientCert,
+			LocalPrivateKey: clientPriv,
+		},
+	}
+
+	sRaw, cRaw := net.Pipe()
+	defer sRaw.Close()
+	defer cRaw.Close()
+
+	serverDone := make(chan struct{})
+	var sConn net.Conn
+	var sMeta *HandshakeMeta
+	var sErr error
+	go func() {
+		defer close(serverDone)
+		sConn, sMeta, sErr = ServerHandshake(context.Background(), sRaw, serverOpts)
+	}()
+
+	cConn, _, cErr := ClientHandshake(context.Background(), cRaw, clientOpts)
+	if cErr != nil {
+		t.Fatalf(&quot;client handshake: %v&quot;, cErr)
+	}
+	defer cConn.Close()
+
+	&lt;-serverDone
+	if sErr != nil {
+		t.Fatalf(&quot;server handshake: %v&quot;, sErr)
+	}
+	defer sConn.Close()
+
+	if sMeta == nil || sMeta.PeerSubject != &quot;device-1&quot; {
+		t.Fatalf(&quot;unexpected server meta: %#v&quot;, sMeta)
+	}
+
+	// Client -&gt; Server
+	msg := []byte(&quot;hello-bci&quot;)
+	go func() {
+		_, _ = cConn.Write(msg)
+	}()
+	buf := make([]byte, len(msg))
+	if _, err := io.ReadFull(sConn, buf); err != nil {
+		t.Fatalf(&quot;server read: %v&quot;, err)
+	}
+	if string(buf) != string(msg) {
+		t.Fatalf(&quot;payload mismatch&quot;)
+	}
+}
+
+func TestHandshakeReplayDetected(t *testing.T) {
+	masterPub, masterPriv, _ := ed25519.GenerateKey(rand.Reader)
+	serverPub, serverPriv, _ := ed25519.GenerateKey(rand.Reader)
+	clientPub, clientPriv, _ := ed25519.GenerateKey(rand.Reader)
+
+	serverCert := issueTestCert(t, masterPriv, &quot;server-1&quot;, serverPub, 1)
+	clientCert := issueTestCert(t, masterPriv, &quot;device-1&quot;, clientPub, 2)
+
+	psk := &quot;test-psk-2&quot;
+	replay := NewReplayCache(32, 5*time.Minute)
+
+	serverOpts := &amp;ServerOptions{
+		Obfs: ObfsOptions{
+			ASCII:              &quot;prefer_entropy&quot;,
+			CustomTables:       []string{&quot;xppppxvv&quot;},
+			PaddingMin:         0,
+			PaddingMax:         0,
+			EnablePureDownlink: true,
+		},
+		Security: SecurityOptions{
+			PSK:              psk,
+			HandshakeAEAD:    AEADChaCha20Poly1305,
+			SessionAEAD:      AEADChaCha20Poly1305,
+			HandshakeTimeout: 2 * time.Second,
+			TimeSkew:         2 * time.Minute,
+			MaxHandshakeSize: 8 * 1024,
+			ReplayWindow:     5 * time.Minute,
+			ReplayCacheSize:  32,
+		},
+		Identity: IdentityOptions{
+			MasterPublicKey: masterPub,
+			LocalCert:       serverCert,
+			LocalPrivateKey: serverPriv,
+		},
+		Replay: replay,
+	}
+
+	clientOpts := func() *ClientOptions {
+		return &amp;ClientOptions{
+			Obfs: ObfsOptions{
+				ASCII:              &quot;prefer_entropy&quot;,
+				CustomTables:       []string{&quot;xppppxvv&quot;},
+				PaddingMin:         0,
+				PaddingMax:         0,
+				EnablePureDownlink: true,
+			},
+			Security: SecurityOptions{
+				PSK:              psk,
+				HandshakeAEAD:    AEADChaCha20Poly1305,
+				SessionAEAD:      AEADChaCha20Poly1305,
+				HandshakeTimeout: 2 * time.Second,
+				TimeSkew:         2 * time.Minute,
+				MaxHandshakeSize: 8 * 1024,
+			},
+			Identity: IdentityOptions{
+				MasterPublicKey: masterPub,
+				LocalCert:       clientCert,
+				LocalPrivateKey: clientPriv,
+			},
+			Rand: repeatReader{b: 0x42},
+		}
+	}
+
+	// 1st handshake should pass.
+	{
+		sRaw, cRaw := net.Pipe()
+		serverDone := make(chan struct{})
+		var sErr error
+		go func() {
+			defer close(serverDone)
+			_, _, sErr = ServerHandshake(context.Background(), sRaw, serverOpts)
+		}()
+		_, _, cErr := ClientHandshake(context.Background(), cRaw, clientOpts())
+		if cErr != nil {
+			t.Fatalf(&quot;client handshake(1): %v&quot;, cErr)
+		}
+		&lt;-serverDone
+		if sErr != nil {
+			t.Fatalf(&quot;server handshake(1): %v&quot;, sErr)
+		}
+	}
+
+	// 2nd handshake with same nonce should be rejected as replay.
+	{
+		sRaw, cRaw := net.Pipe()
+		serverDone := make(chan struct{})
+		var sErr error
+		go func() {
+			defer close(serverDone)
+			_, _, sErr = ServerHandshake(context.Background(), sRaw, serverOpts)
+		}()
+		_, _, cErr := ClientHandshake(context.Background(), cRaw, clientOpts())
+		if cErr != nil {
+			// Client will fail because server aborts; both acceptable.
+		}
+		&lt;-serverDone
+		if sErr == nil || !errors.Is(sErr, ErrReplayDetected) {
+			t.Fatalf(&quot;expected replay error, got %v&quot;, sErr)
+		}
+	}
+}
+</pre></details><details class="card"><summary><b>docs source</b> — <code>doc/HANDSHAKE.md</code></summary><pre># Handshake &amp; Anti-Replay
+
+实现代码：
+- Client：`pkg/iotbci/handshake_client.go`
+- Server：`pkg/iotbci/handshake_server.go`
+
+## 1. 握手目标
+
+- 双向身份认证：Ed25519 证书 + 签名验证（抗 MITM）。
+- 前向安全：会话密钥来自 X25519 临时密钥交换（即使 PSK 泄露也不应解密历史会话）。
+- 抗重放：时间戳窗口 + 有界 nonce 缓存（工程可测、可证明有效）。
+- 抗主动探测：握手通道可选 PSK-AEAD 保护，使未授权探测难以获得可区分响应。
+
+## 2. 时序（3 步）
+
+```
+Client                                  Server
+  |-- ClientHello (sig) ------------------&gt;|
+  |&lt;------------------ ServerHello (sig) --|
+  |-- ClientFinish (HMAC confirm) --------&gt;|
+  |========= switch to SessionConn ========|
+```
+
+## 3. 认证与绑定点
+
+### 3.1 ClientHello
+
+服务端在通过以下校验后，才会写入重放缓存：
+
+1) frame magic/version/type 合法；
+2) 时间戳窗口合法；
+3) 证书验证（MasterPublicKey 或 pin）；
+4) ClientHello 的 Ed25519 签名验证通过；
+5) `flags` 与本端配置一致（避免 downgrade/配置不一致）。
+
+### 3.2 ServerHello
+
+客户端验证：
+
+1) `echo_nonce_c` 必须等于本端 `nonce_c`（防反射/绑定会话）；
+2) 证书验证；
+3) ServerHello 的 Ed25519 签名验证；
+4) `client_hello_hash` 必须匹配（绑定 ClientHello）。
+
+### 3.3 ClientFinish
+
+服务端验证 `HMAC(confirm_key, client_hello_hash || server_hello_hash)`：
+
+- 若通过：证明客户端具备 ECDH 共享密钥并完成握手。
+- 若失败：按可疑流量处理（不返回真实数据，可回落）。
+
+## 4. 抗重放窗口
+
+### 4.1 时间戳窗口
+
+- `abs(now - ts) &lt;= TimeSkew`（默认 30s，建议 LAN 场景 10~60s）
+
+### 4.2 nonce 缓存（有界）
+
+- Token：`user_hash || nonce_c || cert_serial`
+- 缓存：固定容量环形队列（`ReplayCacheSize`），过期窗口（`ReplayWindow`）
+- 行为：命中 -&gt; 返回 `ErrReplayDetected`（服务端应记录并触发回落策略）
+
+## 5. 工程落地注意事项
+
+- **小内存**：`ReplayCacheSize`、`MaxHandshakeSize`、`HandshakeTimeout` 必须可配置。
+- **日志策略**：对重放/认证失败应记录，但不得输出敏感材料（PSK/私钥种子/明文）。
+- **异常处置**：服务端对可疑握手返回 `*SuspiciousError`，供上层统一回落到诱饵服务或 tarpit。
+
+</pre></details></div><div class="card"><h2>TCP stream framing (frame) tests <span class="badge ok">PASS</span></h2><div class="small">relates_to: 基础帧化（TCP流分帧）正确性</div><div class="small"><b>要证明的结论（Claims）</b></div><ul><li>frame.Write 写入 [u32len + payload]；frame.Read 能按 declared length 正确读回 payload。</li><li>Read 会拒绝超出 maxSize 的 declared length，避免内存/资源滥用。</li></ul><div class="small"><b>采用的算法/机制（Algorithm）</b></div><ul><li>帧格式：4 字节大端长度前缀（uint32）+ payload。</li><li>读取：先 io.ReadFull 读 header，再按 maxSize 约束申请缓冲并 io.ReadFull 读 payload。</li></ul><div class="small"><b>本次运行到的测试用例（来自 -v 输出）</b></div><ul><li><code>TestFrameRoundTrip</code></li><li><code>TestFrameErrors</code></li></ul><div class="small"><code>go test ./pkg/iotbci/frame -count=1 -v</code></div><details class="card"><summary><b>go test 原始输出</b></summary><pre>=== RUN   TestFrameRoundTrip
+=== PAUSE TestFrameRoundTrip
+=== RUN   TestFrameErrors
+=== PAUSE TestFrameErrors
+=== CONT  TestFrameRoundTrip
+--- PASS: TestFrameRoundTrip (0.00s)
+=== CONT  TestFrameErrors
+--- PASS: TestFrameErrors (0.00s)
+PASS
+ok  	github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci/frame	0.532s
+</pre></details><div class="card"><h2>过程性示例（可截图/可复制）</h2><div class="small"><b>frame_example</b></div><div class="small">meta:</div><pre>{
+  &quot;payload&quot;: &quot;bci-frame&quot;,
+  &quot;header_hex&quot;: &quot;00000009&quot;,
+  &quot;wire_hex&quot;: &quot;000000096263692d6672616d65&quot;,
+  &quot;explain&quot;: &quot;Frame format: [len: u32 big-endian] + payload bytes&quot;
+}</pre><div class="small">hexdump:</div><pre>00000000  00 00 00 09 62 63 69 2d 66 72 61 6d 65            |....bci-frame|
+</pre></div><details class="card"><summary><b>impl source</b> — <code>pkg/iotbci/frame/frame.go</code></summary><pre>package frame
+
+import (
+	&quot;encoding/binary&quot;
+	&quot;fmt&quot;
+	&quot;io&quot;
+)
+
+const (
+	MaxFrameSizeDefault = 1 &lt;&lt; 20 // 1 MiB
+)
+
+func Write(w io.Writer, payload []byte) error {
+	if w == nil {
+		return fmt.Errorf(&quot;frame: nil writer&quot;)
+	}
+	if len(payload) &gt; int(^uint32(0)) {
+		return fmt.Errorf(&quot;frame: payload too large: %d&quot;, len(payload))
+	}
+	var header [4]byte
+	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
+	if err := writeFull(w, header[:]); err != nil {
+		return err
+	}
+	return writeFull(w, payload)
+}
+
+func Read(r io.Reader, maxSize int) ([]byte, error) {
+	if r == nil {
+		return nil, fmt.Errorf(&quot;frame: nil reader&quot;)
+	}
+	if maxSize &lt;= 0 {
+		maxSize = MaxFrameSizeDefault
+	}
+
+	var header [4]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil {
+		return nil, err
+	}
+	n := int(binary.BigEndian.Uint32(header[:]))
+	if n &lt; 0 || n &gt; maxSize {
+		return nil, fmt.Errorf(&quot;frame: invalid length %d&quot;, n)
+	}
+	b := make([]byte, n)
+	if _, err := io.ReadFull(r, b); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func writeFull(w io.Writer, b []byte) error {
+	for len(b) &gt; 0 {
+		n, err := w.Write(b)
+		if err != nil {
+			return err
+		}
+		b = b[n:]
+	}
+	return nil
+}
+</pre></details><details class="card"><summary><b>tests source</b> — <code>pkg/iotbci/frame/frame_test.go</code></summary><pre>package frame
+
+import (
+	&quot;bytes&quot;
+	&quot;testing&quot;
+)
+
+func TestFrameRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	payload := []byte(&quot;bci-frame&quot;)
+	if err := Write(&amp;buf, payload); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Read(&amp;buf, MaxFrameSizeDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(payload) {
+		t.Fatalf(&quot;mismatch&quot;)
+	}
+}
+
+func TestFrameErrors(t *testing.T) {
+	t.Parallel()
+
+	if err := Write(nil, []byte(&quot;x&quot;)); err == nil {
+		t.Fatalf(&quot;expected error&quot;)
+	}
+	if _, err := Read(nil, 1); err == nil {
+		t.Fatalf(&quot;expected error&quot;)
+	}
+
+	// Invalid declared length.
+	var buf bytes.Buffer
+	_, _ = buf.Write([]byte{0, 0, 0, 10})
+	_, err := Read(&amp;buf, 5)
+	if err == nil {
+		t.Fatalf(&quot;expected error&quot;)
+	}
+}
+</pre></details></div><div class="card"><h2>UoT (UDP over TCP) tests <span class="badge ok">PASS</span></h2><div class="small">relates_to: UoT 封装模块单测</div><div class="small"><b>要证明的结论（Claims）</b></div><ul><li>该模块实现“UDP over TCP”的语义：在 stream conn 上保留 datagram 边界并支持 ReadFrom/WriteTo。</li><li>preface(magic+version) 能将 UoT 会话从普通 TCP 流中区分出来（证明“确实是 UoT”）。</li><li>payload 与 addr 能被编码、传输、解码回原值（证明“UDP 信息传成功了”）。</li><li>ShortBuffer 场景会丢弃剩余字节以保持 framing 对齐，并返回 io.ErrShortBuffer。</li></ul><div class="small"><b>采用的算法/机制（Algorithm）</b></div><ul><li>preface：2 bytes = [MagicByte=0xEE][version=0x01]（WritePreface/ReadPreface）。</li><li>datagram frame：4 bytes header = [addrLen u16be][payloadLen u16be]，随后 addr bytes + payload bytes（WriteDatagram/ReadDatagram）。</li><li>PacketConn：ReadFrom/WriteTo 基于上述 frame；并用 readMu/writeMu 保证并发下 framing 不交织。</li></ul><div class="small"><b>本次运行到的测试用例（来自 -v 输出）</b></div><ul><li><code>TestDatagramRoundTrip</code></li><li><code>TestPacketConnRoundTrip</code></li><li><code>TestPacketConn_ShortBuffer</code></li><li><code>TestPrefaceAndAddr</code></li><li><code>TestPacketConn_MiscMethods</code></li></ul><div class="small"><code>go test ./pkg/iotbci/uot -count=1 -v</code></div><details class="card"><summary><b>go test 原始输出</b></summary><pre>=== RUN   TestDatagramRoundTrip
+--- PASS: TestDatagramRoundTrip (0.00s)
+=== RUN   TestPacketConnRoundTrip
+--- PASS: TestPacketConnRoundTrip (0.00s)
+=== RUN   TestPacketConn_ShortBuffer
+--- PASS: TestPacketConn_ShortBuffer (0.00s)
+=== RUN   TestPrefaceAndAddr
+--- PASS: TestPrefaceAndAddr (0.00s)
+=== RUN   TestPacketConn_MiscMethods
+--- PASS: TestPacketConn_MiscMethods (0.00s)
+PASS
+ok  	github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci/uot	0.369s
+</pre></details><div class="card"><h2>过程性示例（可截图/可复制）</h2><div class="small"><b>uot_example</b></div><div class="small">meta:</div><pre>{
+  &quot;addr&quot;: &quot;127.0.0.1:9000&quot;,
+  &quot;payload&quot;: &quot;udp-payload-demo&quot;,
+  &quot;wire_len&quot;: 36,
+  &quot;parsed&quot;: {
+    &quot;magic&quot;: &quot;0xEE&quot;,
+    &quot;version&quot;: &quot;0x01&quot;,
+    &quot;addrLen&quot;: 14,
+    &quot;payloadLen&quot;: 16
+  },
+  &quot;explain&quot;: &quot;UoT framing: [preface 0xEE 0x01] + [addrLen u16be][payloadLen u16be] + addr + payload&quot;
+}</pre><div class="small">hexdump:</div><pre>00000000  ee 01 00 0e 00 10 31 32 37 2e 30 2e 30 2e 31 3a   |......127.0.0.1:|
+00000010  39 30 30 30 75 64 70 2d 70 61 79 6c 6f 61 64 2d   |9000udp-payload-|
+00000020  64 65 6d 6f                                       |demo|
+</pre></div><details class="card"><summary><b>impl source</b> — <code>pkg/iotbci/uot/uot.go</code></summary><pre>package uot
+
+import (
+	&quot;encoding/binary&quot;
+	&quot;fmt&quot;
+	&quot;io&quot;
+	&quot;net&quot;
+	&quot;sync&quot;
+	&quot;time&quot;
+)
+
+const (
+	// MagicByte marks a UDP-over-TCP session.
+	MagicByte byte = 0xEE
+	version   byte = 0x01
+
+	maxFrame = 64 * 1024
+)
+
+func WritePreface(w io.Writer) error {
+	_, err := w.Write([]byte{MagicByte, version})
+	return err
+}
+
+func ReadPreface(r io.Reader) error {
+	var b [2]byte
+	if _, err := io.ReadFull(r, b[:]); err != nil {
+		return err
+	}
+	if b[0] != MagicByte {
+		return fmt.Errorf(&quot;invalid uot magic: %d&quot;, b[0])
+	}
+	if b[1] != version {
+		return fmt.Errorf(&quot;unsupported uot version: %d&quot;, b[1])
+	}
+	return nil
+}
+
+func WriteDatagram(w io.Writer, addr string, payload []byte) error {
+	addrBytes := []byte(addr)
+	if len(addrBytes) &gt; int(^uint16(0)) {
+		return fmt.Errorf(&quot;address too long: %d&quot;, len(addrBytes))
+	}
+	if len(payload) &gt; int(^uint16(0)) {
+		return fmt.Errorf(&quot;payload too large: %d&quot;, len(payload))
+	}
+	if len(addrBytes) &gt; maxFrame || len(payload) &gt; maxFrame {
+		return fmt.Errorf(&quot;frame too large&quot;)
+	}
+
+	var header [4]byte
+	binary.BigEndian.PutUint16(header[0:2], uint16(len(addrBytes)))
+	binary.BigEndian.PutUint16(header[2:4], uint16(len(payload)))
+	if err := writeFull(w, header[:]); err != nil {
+		return err
+	}
+	if err := writeFull(w, addrBytes); err != nil {
+		return err
+	}
+	return writeFull(w, payload)
+}
+
+func ReadDatagram(r io.Reader) (string, []byte, error) {
+	var header [4]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil {
+		return &quot;&quot;, nil, err
+	}
+	addrLen := int(binary.BigEndian.Uint16(header[0:2]))
+	payloadLen := int(binary.BigEndian.Uint16(header[2:4]))
+	if addrLen &lt; 0 || addrLen &gt; maxFrame {
+		return &quot;&quot;, nil, fmt.Errorf(&quot;invalid address length: %d&quot;, addrLen)
+	}
+	if payloadLen &lt; 0 || payloadLen &gt; maxFrame {
+		return &quot;&quot;, nil, fmt.Errorf(&quot;invalid payload length: %d&quot;, payloadLen)
+	}
+
+	addrBuf := make([]byte, addrLen)
+	if _, err := io.ReadFull(r, addrBuf); err != nil {
+		return &quot;&quot;, nil, err
+	}
+	payload := make([]byte, payloadLen)
+	if _, err := io.ReadFull(r, payload); err != nil {
+		return &quot;&quot;, nil, err
+	}
+	return string(addrBuf), payload, nil
+}
+
+type Addr string
+
+func (a Addr) Network() string { return &quot;uot&quot; }
+func (a Addr) String() string  { return string(a) }
+
+// PacketConn implements net.PacketConn over a stream net.Conn using UoT framing.
+type PacketConn struct {
+	conn    net.Conn
+	readMu  sync.Mutex
+	writeMu sync.Mutex
+}
+
+func NewPacketConn(conn net.Conn) *PacketConn {
+	return &amp;PacketConn{conn: conn}
+}
+
+func (c *PacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
+	c.readMu.Lock()
+	defer c.readMu.Unlock()
+
+	var header [4]byte
+	if _, err := io.ReadFull(c.conn, header[:]); err != nil {
+		return 0, nil, err
+	}
+	addrLen := int(binary.BigEndian.Uint16(header[0:2]))
+	payloadLen := int(binary.BigEndian.Uint16(header[2:4]))
+	if addrLen &lt; 0 || addrLen &gt; maxFrame {
+		return 0, nil, fmt.Errorf(&quot;invalid address length: %d&quot;, addrLen)
+	}
+	if payloadLen &lt; 0 || payloadLen &gt; maxFrame {
+		return 0, nil, fmt.Errorf(&quot;invalid payload length: %d&quot;, payloadLen)
+	}
+
+	addrBuf := make([]byte, addrLen)
+	if _, err := io.ReadFull(c.conn, addrBuf); err != nil {
+		return 0, nil, err
+	}
+
+	if payloadLen &lt;= len(p) {
+		if _, err := io.ReadFull(c.conn, p[:payloadLen]); err != nil {
+			return 0, nil, err
+		}
+		return payloadLen, Addr(string(addrBuf)), nil
+	}
+
+	// Short buffer: read what we can, then discard the rest to keep framing aligned.
+	if len(p) &gt; 0 {
+		if _, err := io.ReadFull(c.conn, p); err != nil {
+			return 0, nil, err
+		}
+	}
+	remain := payloadLen - len(p)
+	if remain &gt; 0 {
+		if _, err := io.CopyN(io.Discard, c.conn, int64(remain)); err != nil {
+			return 0, nil, err
+		}
+	}
+	return len(p), Addr(string(addrBuf)), io.ErrShortBuffer
+}
+
+func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (int, error) {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	dst := &quot;&quot;
+	if addr != nil {
+		dst = addr.String()
+	}
+	if err := WriteDatagram(c.conn, dst, p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (c *PacketConn) Close() error { return c.conn.Close() }
+
+func (c *PacketConn) LocalAddr() net.Addr { return c.conn.LocalAddr() }
+
+func (c *PacketConn) SetDeadline(t time.Time) error {
+	_ = c.SetReadDeadline(t)
+	_ = c.SetWriteDeadline(t)
+	return nil
+}
+
+func (c *PacketConn) SetReadDeadline(t time.Time) error  { return c.conn.SetReadDeadline(t) }
+func (c *PacketConn) SetWriteDeadline(t time.Time) error { return c.conn.SetWriteDeadline(t) }
+
+func writeFull(w io.Writer, b []byte) error {
+	for len(b) &gt; 0 {
+		n, err := w.Write(b)
+		if err != nil {
+			return err
+		}
+		b = b[n:]
+	}
+	return nil
+}
+</pre></details><details class="card"><summary><b>tests source</b> — <code>pkg/iotbci/uot/uot_test.go</code></summary><pre>package uot
+
+import (
+	&quot;bytes&quot;
+	&quot;io&quot;
+	&quot;net&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+)
+
+func TestDatagramRoundTrip(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WriteDatagram(&amp;buf, &quot;addr-1&quot;, []byte(&quot;hello&quot;)); err != nil {
+		t.Fatalf(&quot;WriteDatagram: %v&quot;, err)
+	}
+	addr, payload, err := ReadDatagram(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf(&quot;ReadDatagram: %v&quot;, err)
+	}
+	if addr != &quot;addr-1&quot; || string(payload) != &quot;hello&quot; {
+		t.Fatalf(&quot;mismatch: addr=%q payload=%q&quot;, addr, payload)
+	}
+}
+
+func TestPacketConnRoundTrip(t *testing.T) {
+	sRaw, cRaw := net.Pipe()
+	defer sRaw.Close()
+	defer cRaw.Close()
+
+	s := NewPacketConn(sRaw)
+	c := NewPacketConn(cRaw)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		buf := make([]byte, 64)
+		n, addr, err := s.ReadFrom(buf)
+		if err != nil {
+			return
+		}
+		if addr.String() != &quot;dst&quot; || string(buf[:n]) != &quot;ping&quot; {
+			return
+		}
+		_, _ = s.WriteTo([]byte(&quot;pong&quot;), Addr(&quot;dst&quot;))
+	}()
+
+	if _, err := c.WriteTo([]byte(&quot;ping&quot;), Addr(&quot;dst&quot;)); err != nil {
+		t.Fatalf(&quot;WriteTo: %v&quot;, err)
+	}
+	buf := make([]byte, 64)
+	n, _, err := c.ReadFrom(buf)
+	if err != nil {
+		t.Fatalf(&quot;ReadFrom: %v&quot;, err)
+	}
+	if string(buf[:n]) != &quot;pong&quot; {
+		t.Fatalf(&quot;want pong, got %q&quot;, buf[:n])
+	}
+	&lt;-done
+}
+
+func TestPacketConn_ShortBuffer(t *testing.T) {
+	sRaw, cRaw := net.Pipe()
+	defer sRaw.Close()
+	defer cRaw.Close()
+
+	s := NewPacketConn(sRaw)
+	c := NewPacketConn(cRaw)
+
+	go func() {
+		_, _ = c.WriteTo(bytes.Repeat([]byte{0xAA}, 64), Addr(&quot;dst&quot;))
+	}()
+
+	buf := make([]byte, 8)
+	_, _, err := s.ReadFrom(buf)
+	if err != io.ErrShortBuffer {
+		t.Fatalf(&quot;expected ErrShortBuffer, got %v&quot;, err)
+	}
+}
+
+func TestPrefaceAndAddr(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WritePreface(&amp;buf); err != nil {
+		t.Fatalf(&quot;WritePreface: %v&quot;, err)
+	}
+	if err := ReadPreface(bytes.NewReader(buf.Bytes())); err != nil {
+		t.Fatalf(&quot;ReadPreface: %v&quot;, err)
+	}
+	if Addr(&quot;x&quot;).Network() != &quot;uot&quot; {
+		t.Fatalf(&quot;unexpected network&quot;)
+	}
+}
+
+func TestPacketConn_MiscMethods(t *testing.T) {
+	sRaw, cRaw := net.Pipe()
+	defer sRaw.Close()
+	defer cRaw.Close()
+
+	pc := NewPacketConn(sRaw)
+	_ = pc.LocalAddr()
+	_ = pc.SetDeadline(time.Now().Add(10 * time.Millisecond))
+	_ = pc.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+	_ = pc.SetWriteDeadline(time.Now().Add(10 * time.Millisecond))
+	if err := pc.Close(); err != nil {
+		t.Fatalf(&quot;Close: %v&quot;, err)
+	}
+}
+</pre></details></div><div class="card"><h2>Fallback / suspicious handling tests (node) <span class="badge ok">PASS</span></h2><div class="small">relates_to: 回落策略触发测试 / 异常输入处理</div><div class="small"><b>要证明的结论（Claims）</b></div><ul><li>当识别到可疑流量时，系统会把“已记录/缓冲的坏数据 + 后续 live bytes”转发到 fallback 服务，并把响应再转回客户端。</li><li>silent 动作会丢弃输入并尽快返回（避免资源占用）。</li></ul><div class="small"><b>采用的算法/机制（Algorithm）</b></div><ul><li>HandleSuspicious：若 action=silent 则 io.Copy(io.Discard) + hold + close；否则 dial fallback TCP。</li><li>若 conn 提供 GetBufferedAndRecorded，则先把已记录的 badData 写入 fallback；随后双向 io.Copy 进行转发。</li></ul><div class="small"><b>本次运行到的测试用例（来自 -v 输出）</b></div><ul><li><code>TestHandleSuspicious_FallbackForwardsRecordedAndLiveBytes</code></li><li><code>TestHandleSuspicious_SilentAction</code></li></ul><div class="small"><code>go test ./internal/node -run TestHandleSuspicious -count=1 -v</code></div><details class="card"><summary><b>go test 原始输出</b></summary><pre>=== RUN   TestHandleSuspicious_FallbackForwardsRecordedAndLiveBytes
+=== PAUSE TestHandleSuspicious_FallbackForwardsRecordedAndLiveBytes
+=== RUN   TestHandleSuspicious_SilentAction
+=== PAUSE TestHandleSuspicious_SilentAction
+=== CONT  TestHandleSuspicious_FallbackForwardsRecordedAndLiveBytes
+=== CONT  TestHandleSuspicious_SilentAction
+--- PASS: TestHandleSuspicious_SilentAction (0.00s)
+--- PASS: TestHandleSuspicious_FallbackForwardsRecordedAndLiveBytes (0.00s)
+PASS
+ok  	github.com/BlingCc233/IoT_BCI-sudoku/internal/node	0.380s
+</pre></details><details class="card"><summary><b>impl source</b> — <code>internal/node/fallback.go</code></summary><pre>package node
+
+import (
+	&quot;io&quot;
+	&quot;net&quot;
+	&quot;time&quot;
+
+	&quot;github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci&quot;
+)
+
+var silentHoldDuration = 2 * time.Second
+
+func HandleSuspicious(wrapper net.Conn, rawConn net.Conn, fallbackAddr string, action string) {
+	if rawConn == nil {
+		return
+	}
+
+	switch action {
+	case &quot;silent&quot;:
+		_, _ = io.Copy(io.Discard, rawConn)
+		time.Sleep(silentHoldDuration)
+		_ = rawConn.Close()
+		return
+	default:
+	}
+
+	if fallbackAddr == &quot;&quot; {
+		_ = rawConn.Close()
+		return
+	}
+
+	dst, err := net.DialTimeout(&quot;tcp&quot;, fallbackAddr, 3*time.Second)
+	if err != nil {
+		_ = rawConn.Close()
+		return
+	}
+
+	var badData []byte
+	if wrapper != nil {
+		if rc, ok := wrapper.(iotbci.RecordedConn); ok {
+			badData = rc.GetBufferedAndRecorded()
+		} else if rc, ok := wrapper.(interface{ GetBufferedAndRecorded() []byte }); ok {
+			badData = rc.GetBufferedAndRecorded()
+		}
+	}
+	if len(badData) &gt; 0 {
+		_ = dst.SetWriteDeadline(time.Now().Add(3 * time.Second))
+		_ = writeFull(dst, badData)
+		_ = dst.SetWriteDeadline(time.Time{})
+	}
+
+	go func() {
+		defer dst.Close()
+		_, _ = io.Copy(dst, rawConn)
+	}()
+	go func() {
+		defer rawConn.Close()
+		_, _ = io.Copy(rawConn, dst)
+	}()
+}
+
+func writeFull(w io.Writer, b []byte) error {
+	for len(b) &gt; 0 {
+		n, err := w.Write(b)
+		if err != nil {
+			return err
+		}
+		b = b[n:]
+	}
+	return nil
+}
+</pre></details><details class="card"><summary><b>tests source</b> — <code>internal/node/fallback_test.go</code></summary><pre>package node
+
+import (
+	&quot;bytes&quot;
+	&quot;io&quot;
+	&quot;net&quot;
+	&quot;sync&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+)
+
+type fakeRecordedConn struct {
+	net.Conn
+	data []byte
+}
+
+func (f *fakeRecordedConn) GetBufferedAndRecorded() []byte { return append([]byte(nil), f.data...) }
+
+func TestHandleSuspicious_FallbackForwardsRecordedAndLiveBytes(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen(&quot;tcp&quot;, &quot;127.0.0.1:0&quot;)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	var (
+		gotMu sync.Mutex
+		got   bytes.Buffer
+	)
+
+	serverDone := make(chan error, 1)
+	go func() {
+		defer close(serverDone)
+		c, err := ln.Accept()
+		if err != nil {
+			serverDone &lt;- err
+			return
+		}
+		defer c.Close()
+		_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+
+		buf := make([]byte, 16)
+		for got.Len() &lt; len(&quot;BADHELLO&quot;) {
+			n, err := c.Read(buf)
+			if n &gt; 0 {
+				gotMu.Lock()
+				got.Write(buf[:n])
+				gotMu.Unlock()
+			}
+			if err != nil {
+				serverDone &lt;- err
+				return
+			}
+		}
+		_, _ = c.Write([]byte(&quot;ACK&quot;))
+		serverDone &lt;- nil
+	}()
+
+	rawA, rawB := net.Pipe()
+	defer rawA.Close()
+	defer rawB.Close()
+
+	wrapper := &amp;fakeRecordedConn{Conn: rawA, data: []byte(&quot;BAD&quot;)}
+	HandleSuspicious(wrapper, rawA, ln.Addr().String(), &quot;fallback&quot;)
+
+	_ = rawB.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if _, err := rawB.Write([]byte(&quot;HELLO&quot;)); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = rawB.SetReadDeadline(time.Now().Add(2 * time.Second))
+	resp := make([]byte, 3)
+	if _, err := io.ReadFull(rawB, resp); err != nil {
+		t.Fatal(err)
+	}
+	if string(resp) != &quot;ACK&quot; {
+		t.Fatalf(&quot;unexpected resp: %q&quot;, string(resp))
+	}
+
+	if err := &lt;-serverDone; err != nil {
+		t.Fatal(err)
+	}
+
+	gotMu.Lock()
+	defer gotMu.Unlock()
+	if got.String() != &quot;BADHELLO&quot; {
+		t.Fatalf(&quot;unexpected forwarded bytes: %q&quot;, got.String())
+	}
+}
+
+func TestHandleSuspicious_SilentAction(t *testing.T) {
+	t.Parallel()
+
+	old := silentHoldDuration
+	silentHoldDuration = 0
+	t.Cleanup(func() { silentHoldDuration = old })
+
+	rawA, rawB := net.Pipe()
+	defer rawA.Close()
+	defer rawB.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		HandleSuspicious(nil, rawA, &quot;&quot;, &quot;silent&quot;)
+	}()
+
+	// Unblock io.Copy by closing the other side.
+	_ = rawB.Close()
+
+	select {
+	case &lt;-done:
+	case &lt;-time.After(2 * time.Second):
+		t.Fatalf(&quot;silent action did not return&quot;)
+	}
+}
+</pre></details><details class="card"><summary><b>docs source</b> — <code>doc/FALLBACK.md</code></summary><pre># Suspicious Traffic Fallback
+
+When the server detects malformed handshake, replay, or protocol violations, it can:
+
+- Record minimal evidence (bounded)
+- Switch the connection to a decoy handler (no real data)
+- Keep logs safe (rate-limited, do not leak secrets)
+
+## 协议层契约
+
+`iotbci.ServerHandshake` 在可疑场景会返回 `*iotbci.SuspiciousError`：
+
+- `Err`：原因（例如 `ErrReplayDetected`、`ErrAuthFailed`、`ErrProtocolViolation`）
+- `Conn`：一个实现 `GetBufferedAndRecorded()` 的连接包装
+
+`GetBufferedAndRecorded()` 返回的是**原始线上字节**（未解码），上层可以：
+
+1) 先把这段已读数据写入诱饵服务（例如 nginx）；
+2) 再把 `rawConn` 剩余数据双向转发。
+
+这样主动探测者看到的是“正常服务响应”，不会得到真实协议数据路径上的任何信息。
+</pre></details></div>
+  </div>
+</body>
+</html>

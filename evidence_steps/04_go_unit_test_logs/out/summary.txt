@@ -1,0 +1,37 @@
+Generated at: 2026-02-06 18:10:57
+Go: go version go1.23.3 darwin/arm64
+
+- Sudoku custom layout tests (obfs layer): exit=0 dur=0.57s
+  relates_to: 外观层编解码正确性测试 / 自定义 x/v/p
+  tests_run(6): TestCustomLayoutParsingAndPadding, TestCustomLayoutAsciiPriority, TestCustomLayoutConnRoundTrip, TestCustomLayoutPackedRoundTrip, TestCustomLayoutInvalidPatterns, TestCustomLayoutPackedStress
+  claim: 自定义 x/v/p pattern 能正确解析，并生成可识别的 hint 字节（isHint）。
+  claim: padding pool 通过“丢 1 个 x 位”构造，保证 padding 永远不会被误判为 hint（避免解码误收集）。
+  claim: Conn 与 PackedConn 的 round-trip 在 net.Pipe 下可通过（证明编解码链路闭环）。
+  cmd: go test ./pkg/obfs/sudoku -run TestCustomLayout -count=1 -v
+- Handshake unit tests (Ed25519/X25519/anti-replay): exit=0 dur=2.93s
+  relates_to: 握手流程单元测试日志 / 抗重放
+  tests_run(2): TestHandshakeRoundTrip_PureDownlink, TestHandshakeReplayDetected
+  claim: 握手完成后双方获得可用的安全连接（能在 net.Pipe 上读写应用数据）。
+  claim: 服务端能从握手元信息中识别对端身份（PeerSubject）。
+  claim: 重放检测可拒绝“相同随机数/nonce 的第二次握手”（ErrReplayDetected）。
+  cmd: go test ./pkg/iotbci -run TestHandshake -count=1 -v
+- TCP stream framing (frame) tests: exit=0 dur=0.99s
+  relates_to: 基础帧化（TCP流分帧）正确性
+  tests_run(2): TestFrameRoundTrip, TestFrameErrors
+  claim: frame.Write 写入 [u32len + payload]；frame.Read 能按 declared length 正确读回 payload。
+  claim: Read 会拒绝超出 maxSize 的 declared length，避免内存/资源滥用。
+  cmd: go test ./pkg/iotbci/frame -count=1 -v
+- UoT (UDP over TCP) tests: exit=0 dur=0.63s
+  relates_to: UoT 封装模块单测
+  tests_run(5): TestDatagramRoundTrip, TestPacketConnRoundTrip, TestPacketConn_ShortBuffer, TestPrefaceAndAddr, TestPacketConn_MiscMethods
+  claim: 该模块实现“UDP over TCP”的语义：在 stream conn 上保留 datagram 边界并支持 ReadFrom/WriteTo。
+  claim: preface(magic+version) 能将 UoT 会话从普通 TCP 流中区分出来（证明“确实是 UoT”）。
+  claim: payload 与 addr 能被编码、传输、解码回原值（证明“UDP 信息传成功了”）。
+  claim: ShortBuffer 场景会丢弃剩余字节以保持 framing 对齐，并返回 io.ErrShortBuffer。
+  cmd: go test ./pkg/iotbci/uot -count=1 -v
+- Fallback / suspicious handling tests (node): exit=0 dur=0.81s
+  relates_to: 回落策略触发测试 / 异常输入处理
+  tests_run(2): TestHandleSuspicious_FallbackForwardsRecordedAndLiveBytes, TestHandleSuspicious_SilentAction
+  claim: 当识别到可疑流量时，系统会把“已记录/缓冲的坏数据 + 后续 live bytes”转发到 fallback 服务，并把响应再转回客户端。
+  claim: silent 动作会丢弃输入并尽快返回（避免资源占用）。
+  cmd: go test ./internal/node -run TestHandleSuspicious -count=1 -v

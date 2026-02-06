@@ -1,0 +1,15 @@
+Generated at: 2026-02-06 18:10:48
+Patterns: xppppxvv, vppxppvx
+
+- ascii:
+  hintMask=0x40 hintValue=0x40 #hint=64 #padding=32 overlap=0 checks(hint=True, padding=True)
+  padding popcount: min=1 avg=3.50 max=6
+- entropy:
+  hintMask=0x90 hintValue=0x00 #hint=64 #padding=16 overlap=0 checks(hint=True, padding=True)
+  padding popcount: min=1 avg=2.50 max=4
+- custom(xppppxvv):
+  hintMask=0x84 hintValue=0x84 #hint=64 #padding=44 overlap=0 checks(hint=True, padding=True)
+  padding popcount: min=5 avg=5.36 max=7
+- custom(vppxppvx):
+  hintMask=0x11 hintValue=0x11 #hint=64 #padding=44 overlap=0 checks(hint=True, padding=True)
+  padding popcount: min=5 avg=5.36 max=7

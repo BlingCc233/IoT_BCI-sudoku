@@ -1,0 +1,15 @@
+Generated at: 2026-02-06 18:10:48
+Patterns: xppppxvv, vppxppvx
+
+- ascii: distance1_pairs=32
+  pad_min_dist_to_hint_hist={1: 31, 2: 1}
+  padding_onebit_flip_to_hint_hist={1: 31, 2: 1}
+- entropy: distance1_pairs=16
+  pad_min_dist_to_hint_hist={1: 16}
+  padding_onebit_flip_to_hint_hist={1: 16}
+- custom(xppppxvv): distance1_pairs=44
+  pad_min_dist_to_hint_hist={1: 44}
+  padding_onebit_flip_to_hint_hist={1: 44}
+- custom(vppxppvx): distance1_pairs=44
+  pad_min_dist_to_hint_hist={1: 44}
+  padding_onebit_flip_to_hint_hist={1: 44}

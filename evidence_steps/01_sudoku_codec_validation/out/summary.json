@@ -1,0 +1,60 @@
+{
+  "generated_at": "2026-02-06 18:10:51",
+  "go_test": {
+    "cmd": [
+      "go",
+      "test",
+      "./pkg/obfs/sudoku",
+      "-run",
+      "TestCustomLayout",
+      "-count=1"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "ok  \tgithub.com/BlingCc233/IoT_BCI-sudoku/pkg/obfs/sudoku\t0.700s\n"
+  },
+  "results": [
+    {
+      "demo": {
+        "decode_a_ok": true,
+        "decode_b_ok": true,
+        "payload_len": 24,
+        "wire_a_len": 130,
+        "wire_b_len": 129,
+        "wire_differs": true
+      },
+      "go_dump": "evidence_steps/01_sudoku_codec_validation/out/go_dump_xppppxvv.json",
+      "key": "seed-custom",
+      "mode": "prefer_entropy",
+      "pad_rate": 0.25,
+      "pattern": "xppppxvv",
+      "stats": {
+        "puzzles_avg": 8,
+        "puzzles_max": 8,
+        "puzzles_min": 8,
+        "puzzles_total": 2048
+      }
+    },
+    {
+      "demo": {
+        "decode_a_ok": true,
+        "decode_b_ok": true,
+        "payload_len": 24,
+        "wire_a_len": 130,
+        "wire_b_len": 129,
+        "wire_differs": true
+      },
+      "go_dump": "evidence_steps/01_sudoku_codec_validation/out/go_dump_vppxppvx.json",
+      "key": "seed-custom",
+      "mode": "prefer_entropy",
+      "pad_rate": 0.25,
+      "pattern": "vppxppvx",
+      "stats": {
+        "puzzles_avg": 8,
+        "puzzles_max": 8,
+        "puzzles_min": 8,
+        "puzzles_total": 2048
+      }
+    }
+  ]
+}

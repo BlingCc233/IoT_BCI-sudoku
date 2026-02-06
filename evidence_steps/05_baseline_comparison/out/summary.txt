@@ -1,0 +1,30 @@
+Generated at: 2026-02-06 18:10:57
+Go: go version go1.23.3 darwin/arm64
+Repeats: 3
+Outputs:
+- out/bench.json
+- out/evidence_out/evidence.json
+
+Key notes:
+- 推荐用 cmd/iotbci-evidence 的 loopback 结果写论文对比；micro-bench 仅作补充。
+- 为减少抖动，本次每个 benchmark 重复运行并取中位数；同时给出每次运行的 Guard 稳定性表。
+- packed 模式的 wire_ascii_ratio 主要由 CustomTable pattern 与是否开启 padding 决定；固定 pattern 时该指标更稳定。
+- Sudoku 的优势是“可控外观+可调侧写特征”，代价是较高的带宽开销与实现复杂度。
+
+Guard (bench median, RTT+heap both better than DTLS/MQTT):
+- iotbci-sudoku-packed: PASS
+- iotbci-sudoku-pure: PASS
+
+Guard (evidence median, RTT+heap both better than DTLS/MQTT):
+- iotbci-sudoku-packed-tcp: PASS
+- iotbci-sudoku-pure-tcp: PASS
+
+Evidence BCI score (exclude overhead_ratio/wire bytes):
+- #1 pure-aead-tcp score=0.8154
+- #2 coap-udp score=0.8047
+- #3 iotbci-sudoku-packed-tcp score=0.7185
+
+Sudoku shortboard vs MQTT/DTLS (evidence):
+- iotbci-sudoku-packed-tcp: no shortboard (beats MQTT/DTLS on key perf metrics)
+- iotbci-sudoku-pure-tcp: no shortboard (beats MQTT/DTLS on key perf metrics)
+

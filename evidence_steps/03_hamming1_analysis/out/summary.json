@@ -1,0 +1,428 @@
+{
+  "generated_at": "2026-02-06 18:10:48",
+  "layouts": [
+    {
+      "distance1_pairs_count": 32,
+      "distance1_pairs_sample": [
+        {
+          "hint": "0x60",
+          "padding": "0x20"
+        },
+        {
+          "hint": "0x61",
+          "padding": "0x21"
+        },
+        {
+          "hint": "0x62",
+          "padding": "0x22"
+        },
+        {
+          "hint": "0x63",
+          "padding": "0x23"
+        },
+        {
+          "hint": "0x64",
+          "padding": "0x24"
+        },
+        {
+          "hint": "0x65",
+          "padding": "0x25"
+        },
+        {
+          "hint": "0x66",
+          "padding": "0x26"
+        },
+        {
+          "hint": "0x67",
+          "padding": "0x27"
+        },
+        {
+          "hint": "0x68",
+          "padding": "0x28"
+        },
+        {
+          "hint": "0x69",
+          "padding": "0x29"
+        },
+        {
+          "hint": "0x0A",
+          "padding": "0x2A"
+        },
+        {
+          "hint": "0x6A",
+          "padding": "0x2A"
+        },
+        {
+          "hint": "0x6B",
+          "padding": "0x2B"
+        },
+        {
+          "hint": "0x6C",
+          "padding": "0x2C"
+        },
+        {
+          "hint": "0x6D",
+          "padding": "0x2D"
+        },
+        {
+          "hint": "0x6E",
+          "padding": "0x2E"
+        },
+        {
+          "hint": "0x6F",
+          "padding": "0x2F"
+        },
+        {
+          "hint": "0x70",
+          "padding": "0x30"
+        },
+        {
+          "hint": "0x71",
+          "padding": "0x31"
+        },
+        {
+          "hint": "0x72",
+          "padding": "0x32"
+        }
+      ],
+      "hint_bytes_count": 64,
+      "hint_min_dist_to_padding_hist": {
+        "1": 32,
+        "2": 32
+      },
+      "hint_pairwise_dist_hist": {
+        "1": 187,
+        "2": 471,
+        "3": 635,
+        "4": 485,
+        "5": 200,
+        "6": 37,
+        "7": 1
+      },
+      "name": "ascii",
+      "pad_min_dist_to_hint_hist": {
+        "1": 31,
+        "2": 1
+      },
+      "padding_bytes_count": 32,
+      "padding_onebit_flip_to_hint_hist": {
+        "1": 31,
+        "2": 1
+      }
+    },
+    {
+      "distance1_pairs_count": 16,
+      "distance1_pairs_sample": [
+        {
+          "hint": "0x00",
+          "padding": "0x10"
+        },
+        {
+          "hint": "0x01",
+          "padding": "0x11"
+        },
+        {
+          "hint": "0x02",
+          "padding": "0x12"
+        },
+        {
+          "hint": "0x03",
+          "padding": "0x13"
+        },
+        {
+          "hint": "0x04",
+          "padding": "0x14"
+        },
+        {
+          "hint": "0x05",
+          "padding": "0x15"
+        },
+        {
+          "hint": "0x06",
+          "padding": "0x16"
+        },
+        {
+          "hint": "0x07",
+          "padding": "0x17"
+        },
+        {
+          "hint": "0x00",
+          "padding": "0x80"
+        },
+        {
+          "hint": "0x01",
+          "padding": "0x81"
+        },
+        {
+          "hint": "0x02",
+          "padding": "0x82"
+        },
+        {
+          "hint": "0x03",
+          "padding": "0x83"
+        },
+        {
+          "hint": "0x04",
+          "padding": "0x84"
+        },
+        {
+          "hint": "0x05",
+          "padding": "0x85"
+        },
+        {
+          "hint": "0x06",
+          "padding": "0x86"
+        },
+        {
+          "hint": "0x07",
+          "padding": "0x87"
+        }
+      ],
+      "hint_bytes_count": 64,
+      "hint_min_dist_to_padding_hist": {
+        "1": 8,
+        "2": 24,
+        "3": 24,
+        "4": 8
+      },
+      "hint_pairwise_dist_hist": {
+        "1": 192,
+        "2": 480,
+        "3": 640,
+        "4": 480,
+        "5": 192,
+        "6": 32
+      },
+      "name": "entropy",
+      "pad_min_dist_to_hint_hist": {
+        "1": 16
+      },
+      "padding_bytes_count": 16,
+      "padding_onebit_flip_to_hint_hist": {
+        "1": 16
+      }
+    },
+    {
+      "distance1_pairs_count": 44,
+      "distance1_pairs_sample": [
+        {
+          "hint": "0x9F",
+          "padding": "0x1F"
+        },
+        {
+          "hint": "0xAF",
+          "padding": "0x2F"
+        },
+        {
+          "hint": "0xB7",
+          "padding": "0x37"
+        },
+        {
+          "hint": "0xBD",
+          "padding": "0x3D"
+        },
+        {
+          "hint": "0xBE",
+          "padding": "0x3E"
+        },
+        {
+          "hint": "0xBF",
+          "padding": "0x3F"
+        },
+        {
+          "hint": "0xCF",
+          "padding": "0x4F"
+        },
+        {
+          "hint": "0xD7",
+          "padding": "0x57"
+        },
+        {
+          "hint": "0xDD",
+          "padding": "0x5D"
+        },
+        {
+          "hint": "0xDE",
+          "padding": "0x5E"
+        },
+        {
+          "hint": "0xDF",
+          "padding": "0x5F"
+        },
+        {
+          "hint": "0xE7",
+          "padding": "0x67"
+        },
+        {
+          "hint": "0xED",
+          "padding": "0x6D"
+        },
+        {
+          "hint": "0xEE",
+          "padding": "0x6E"
+        },
+        {
+          "hint": "0xEF",
+          "padding": "0x6F"
+        },
+        {
+          "hint": "0xF5",
+          "padding": "0x75"
+        },
+        {
+          "hint": "0xF6",
+          "padding": "0x76"
+        },
+        {
+          "hint": "0xF7",
+          "padding": "0x77"
+        },
+        {
+          "hint": "0xFC",
+          "padding": "0x7C"
+        },
+        {
+          "hint": "0xFD",
+          "padding": "0x7D"
+        }
+      ],
+      "hint_bytes_count": 64,
+      "hint_min_dist_to_padding_hist": {
+        "1": 22,
+        "2": 20,
+        "3": 15,
+        "4": 6,
+        "5": 1
+      },
+      "hint_pairwise_dist_hist": {
+        "1": 192,
+        "2": 480,
+        "3": 640,
+        "4": 480,
+        "5": 192,
+        "6": 32
+      },
+      "name": "custom(xppppxvv)",
+      "pad_min_dist_to_hint_hist": {
+        "1": 44
+      },
+      "padding_bytes_count": 44,
+      "padding_onebit_flip_to_hint_hist": {
+        "1": 44
+      }
+    },
+    {
+      "distance1_pairs_count": 44,
+      "distance1_pairs_sample": [
+        {
+          "hint": "0x3F",
+          "padding": "0x2F"
+        },
+        {
+          "hint": "0x3F",
+          "padding": "0x3E"
+        },
+        {
+          "hint": "0x5F",
+          "padding": "0x4F"
+        },
+        {
+          "hint": "0x5F",
+          "padding": "0x5E"
+        },
+        {
+          "hint": "0x77",
+          "padding": "0x67"
+        },
+        {
+          "hint": "0x7B",
+          "padding": "0x6B"
+        },
+        {
+          "hint": "0x7D",
+          "padding": "0x6D"
+        },
+        {
+          "hint": "0x7F",
+          "padding": "0x6F"
+        },
+        {
+          "hint": "0x77",
+          "padding": "0x76"
+        },
+        {
+          "hint": "0x7B",
+          "padding": "0x7A"
+        },
+        {
+          "hint": "0x7D",
+          "padding": "0x7C"
+        },
+        {
+          "hint": "0x7F",
+          "padding": "0x7E"
+        },
+        {
+          "hint": "0x9F",
+          "padding": "0x8F"
+        },
+        {
+          "hint": "0x9F",
+          "padding": "0x9E"
+        },
+        {
+          "hint": "0xB7",
+          "padding": "0xA7"
+        },
+        {
+          "hint": "0xBB",
+          "padding": "0xAB"
+        },
+        {
+          "hint": "0xBD",
+          "padding": "0xAD"
+        },
+        {
+          "hint": "0xBF",
+          "padding": "0xAF"
+        },
+        {
+          "hint": "0xB7",
+          "padding": "0xB6"
+        },
+        {
+          "hint": "0xBB",
+          "padding": "0xBA"
+        }
+      ],
+      "hint_bytes_count": 64,
+      "hint_min_dist_to_padding_hist": {
+        "1": 22,
+        "2": 20,
+        "3": 15,
+        "4": 6,
+        "5": 1
+      },
+      "hint_pairwise_dist_hist": {
+        "1": 192,
+        "2": 480,
+        "3": 640,
+        "4": 480,
+        "5": 192,
+        "6": 32
+      },
+      "name": "custom(vppxppvx)",
+      "pad_min_dist_to_hint_hist": {
+        "1": 44
+      },
+      "padding_bytes_count": 44,
+      "padding_onebit_flip_to_hint_hist": {
+        "1": 44
+      }
+    }
+  ],
+  "patterns": [
+    "xppppxvv",
+    "vppxppvx"
+  ]
+}

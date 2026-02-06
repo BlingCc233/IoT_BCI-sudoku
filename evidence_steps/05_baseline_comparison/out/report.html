@@ -1,0 +1,3583 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>05 基线对比实验留痕</title>
+  <style>
+:root{
+  --bg:#ffffff;
+  --card:#ffffff;
+  --text:#111827;
+  --muted:#6b7280;
+  --accent:#2563eb;
+  --ok:#16a34a;
+  --bad:#dc2626;
+  --warn:#f59e0b;
+  --border:#e5e7eb;
+  --chip:#f3f4f6;
+  --shadow:0 6px 18px rgba(17,24,39,.08);
+  --mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --hint:#6d28d9;
+  --pad:#0ea5e9;
+  --other:#cbd5e1;
+
+  /* Protocol palette (aligned with cmd/iotbci-dashboard). */
+  --sudoku:#6d28d9;
+  --sudoku2:#a78bfa;
+  --coap:#16a34a;
+  --aead:#0ea5e9;
+  --dtls:#f97316;
+  --mqtt:#ef4444;
+  --protoOther:#64748b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.45}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.container{max-width:1180px;margin:0 auto;padding:20px 20px 48px}
+h1{font-size:20px;margin:8px 0 10px;letter-spacing:.2px}
+h2{font-size:16px;margin:0 0 10px}
+.small{color:var(--muted);font-size:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin:14px 0;box-shadow:var(--shadow)}
+pre,code{font-family:var(--mono)}
+pre{background:#f9fafb;border:1px solid var(--border);padding:12px;border-radius:12px;overflow:auto}
+code{background:rgba(17,24,39,.04);border:1px solid rgba(17,24,39,.06);padding:2px 6px;border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{border:1px solid var(--border);padding:8px 10px;vertical-align:top}
+th{text-align:left;background:#f9fafb;color:#374151}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:var(--chip);color:var(--text)}
+.badge.ok{color:var(--ok)}
+.badge.fail{color:var(--bad)}
+.badge.warn{color:var(--warn)}
+.bytes{line-height:1.9}
+.byte{display:inline-block;font-family:var(--mono);padding:1px 6px;border-radius:8px;margin:1px 2px 1px 0;border:1px solid var(--border);background:rgba(17,24,39,.02)}
+.byte.hint{background:rgba(109,40,217,.10);border-color:rgba(109,40,217,.28)}
+.byte.pad{background:rgba(14,165,233,.10);border-color:rgba(14,165,233,.28)}
+.byte.other{background:rgba(17,24,39,.02)}
+.sudoku-grid{border-collapse:separate;border-spacing:4px;margin:6px 0}
+.sudoku-grid td{width:32px;height:32px;text-align:center;font-family:var(--mono);font-size:13px;background:#f9fafb;border:1px solid var(--border);border-radius:10px}
+.sudoku-grid td.hl{background:rgba(109,40,217,.10);border-color:rgba(109,40,217,.28)}
+svg{max-width:100%;height:auto}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="small">Generated at 2026-02-06 18:11:08</div>
+    <h1>05 基线对比实验留痕（DTLS/CoAP/MQTT/pure-AEAD vs IoTBCI-Sudoku）</h1><div class="card"><h2>目标（对齐进度计划表）</h2><ul><li>说明对比了什么：统一 payload（256B）与消息轮次（5000 RTT），重复运行 3 次并取中位数，输出 overhead/latency/吞吐/内存/外观指标。</li><li>说明如何对比：给出每个协议的运行流程、验证点（为什么能证明成功），并保留一键复现命令与原始 JSON。</li><li>说明结论：给出 Sudoku（pure/packed）的优势与代价（好在哪/坏在哪），并解释 packed 外观指标为何会波动。</li><li>Guard 目标：除 overhead 外，Sudoku pure/packed 在 RTT 和 peak_heap_inuse 必须同时低于 DTLS 与 MQTT。</li></ul><table><tr><th>Generated at</th><td><code>2026-02-06 18:10:57</code></td></tr><tr><th>Go</th><td><code>go version go1.23.3 darwin/arm64</code></td></tr><tr><th>Python</th><td><code>Python 3.9.6</code></td></tr><tr><th>repeats</th><td><code>3</code></td></tr><tr><th>bench.json</th><td><code>bench.json</code></td></tr><tr><th>evidence.json</th><td><code>evidence_out/evidence.json</code></td></tr></table></div><div class="card"><h2>对比口径（指标定义）</h2><ul><li><code>overhead_ratio</code> = wire_bytes_total / payload_bytes_total（越小越省带宽）。</li><li><code>avg_rtt_ms</code>/<code>p95_rtt_ms</code>：一次“发送+回显”的 steady-state 处理时延（越小越快，不包含握手/建连/订阅等初始化）。</li><li><code>wire_entropy</code> 与 <code>wire_ascii_ratio</code>：对线上 payload 字节计算（外观侧写：随机性/可打印比例）。</li><li><code>wire_write_size_bins_log2</code>/<code>wire_write_interarrival_ms_bins_log2</code>：写尺寸/写间隔直方图（外观侧写：包长/时序）。</li><li><code>peak_heap_*</code>/<code>peak_sys</code>：Go runtime 采样近似峰值内存（论文需注明采样方法与误差来源）。</li></ul><div class="small">详细字段解释见：<code>doc/BENCHMARKS.md</code></div></div><div class="card"><h2>结果（推荐）：cmd/iotbci-evidence 回环真实 socket</h2><table><tr><th>scenario</th><th>overhead_ratio</th><th>avg_rtt_ms</th><th>p95_rtt_ms</th><th>wire_entropy</th><th>wire_ascii_ratio</th><th>peak_heap_alloc</th><th>peak_heap_inuse</th><th>peak_sys</th><th>wire_bps</th><th>payload_bps</th></tr><tr><td><code>coap-udp</code></td><td>1.043</td><td>0.020</td><td>0.037</td><td>7.983</td><td>36.85%</td><td>3.66 MiB</td><td>4.55 MiB</td><td>12.02 MiB</td><td>24.91 MiB/s</td><td>23.89 MiB/s</td></tr><tr><td><code>dtls-ecdhe-ecdsa-aes256cbc</code></td><td>1.239</td><td>0.042</td><td>0.070</td><td>7.965</td><td>36.04%</td><td>3.42 MiB</td><td>4.45 MiB</td><td>12.02 MiB</td><td>14.35 MiB/s</td><td>11.58 MiB/s</td></tr><tr><td><code>iotbci-sudoku-packed-tcp</code></td><td>1.434</td><td>0.025</td><td>0.045</td><td>6.010</td><td>0.00%</td><td>2.70 MiB</td><td>3.45 MiB</td><td>11.27 MiB</td><td>27.49 MiB/s</td><td>19.17 MiB/s</td></tr><tr><td><code>iotbci-sudoku-pure-tcp</code></td><td>2.858</td><td>0.029</td><td>0.069</td><td>5.841</td><td>98.44%</td><td>2.00 MiB</td><td>2.81 MiB</td><td>6.96 MiB</td><td>46.79 MiB/s</td><td>16.37 MiB/s</td></tr><tr><td><code>mqtt-3.1.1-qos0-tls</code></td><td>2.788</td><td>0.085</td><td>0.138</td><td>7.928</td><td>35.03%</td><td>3.74 MiB</td><td>4.89 MiB</td><td>12.02 MiB</td><td>16.07 MiB/s</td><td>5.76 MiB/s</td></tr><tr><td><code>pure-aead-tcp</code></td><td>1.070</td><td>0.025</td><td>0.050</td><td>7.996</td><td>36.81%</td><td>493.07 KiB</td><td>1.07 MiB</td><td>11.27 MiB</td><td>20.94 MiB/s</td><td>19.56 MiB/s</td></tr></table></div><div class="card"><h2>性能 Guard（evidence 中位数）</h2><table><tr><th>sudoku mode</th><th>RTT guard</th><th>RTT(ms)</th><th>Memory guard</th><th>peak_heap_inuse</th><th>overall</th></tr><tr><td><code>iotbci-sudoku-packed-tcp</code></td><td><span class="badge ok">PASS</span></td><td>0.0251 (dtls=0.0418, mqtt=0.0846)</td><td><span class="badge ok">PASS</span></td><td>3.45 MiB (dtls=4.45 MiB, mqtt=4.89 MiB)</td><td><span class="badge ok">PASS</span></td></tr><tr><td><code>iotbci-sudoku-pure-tcp</code></td><td><span class="badge ok">PASS</span></td><td>0.0285 (dtls=0.0418, mqtt=0.0846)</td><td><span class="badge ok">PASS</span></td><td>2.81 MiB (dtls=4.45 MiB, mqtt=4.89 MiB)</td><td><span class="badge ok">PASS</span></td></tr></table><div class="small">Guard rule: Sudoku 的 avg_rtt 与 peak_heap_inuse 必须同时低于 DTLS 和 MQTT（overhead 可高）。</div></div><div class="card"><h2>性能 Guard 稳定性（evidence 每次运行）</h2><table><tr><th>run</th><th><code>iotbci-sudoku-pure-tcp</code></th><th><code>iotbci-sudoku-packed-tcp</code></th><th>all pass</th></tr><tr><td><code>run1</code></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td></tr><tr><td><code>run2</code></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td></tr><tr><td><code>run3</code></td><td><span class="badge warn">FAIL</span></td><td><span class="badge ok">PASS</span></td><td><span class="badge warn">FAIL</span></td></tr><tr><td><b>pass count</b></td><td>2/3</td><td>3/3</td><td><b>2/3</b></td></tr></table><div class="small">用于验证“各 benchmark 得出相同结论”：每次运行都检查 Sudoku pure/packed 是否同时满足 RTT+内存双 guard。</div></div><div class="card"><h2>综合评分（BCI score）：evidence</h2><div class="small">评分口径：按每个指标在本表内归一化到 best=1，然后做加权几何平均（分数越大越好）；权重 rtt/tp/heap/calls=0.35/0.35/0.15/0.15。<br/>不计入：overhead_ratio / wire_bytes_total。</div><table><tr><th>rank</th><th>scenario</th><th>score</th><th>rtt</th><th>tp</th><th>heap</th><th>calls</th></tr><tr><td>1</td><td><code>pure-aead-tcp</code></td><td>0.8154</td><td>0.8110</td><td>0.8189</td><td>1.0000</td><td>0.6667</td></tr><tr><td>2</td><td><code>coap-udp</code></td><td>0.8047</td><td>1.0000</td><td>1.0000</td><td>0.2350</td><td>1.0000</td></tr><tr><td>3</td><td><code>iotbci-sudoku-packed-tcp</code></td><td>0.7185</td><td>0.7999</td><td>0.8025</td><td>0.3107</td><td>0.9996</td></tr><tr><td>4</td><td><code>iotbci-sudoku-pure-tcp</code></td><td>0.6706</td><td>0.7049</td><td>0.6854</td><td>0.3806</td><td>0.9996</td></tr><tr><td>5</td><td><code>dtls-ecdhe-ecdsa-aes256cbc</code></td><td>0.4852</td><td>0.4813</td><td>0.4849</td><td>0.2404</td><td>0.9992</td></tr><tr><td>6</td><td><code>mqtt-3.1.1-qos0-tls</code></td><td>0.2289</td><td>0.2378</td><td>0.2413</td><td>0.2188</td><td>0.1938</td></tr></table></div><div class="card"><h2>短板效应分析：Sudoku vs MQTT/DTLS（evidence）</h2><div class="small">短板效应：把 Sudoku 的关键性能指标与 baseline（MQTT/DTLS）里最优者对比，找出“最拖后腿”的那一项。</div><table><tr><th>scenario</th><th>结论</th><th>短板指标</th><th>相对 best baseline 的劣势倍数</th><th>rtt</th><th>tp</th><th>duration</th><th>heap</th></tr><tr><td><code>iotbci-sudoku-packed-tcp</code></td><td><span class="badge ok">无短板（相对 MQTT/DTLS 全面不劣）</span></td><td><span class="badge ok">(none)</span></td><td><span class="badge ok">1.000x</span></td><td><span class="badge ok">0.602x</span></td><td><span class="badge ok">0.604x</span></td><td><span class="badge ok">0.604x</span></td><td><span class="badge ok">0.774x</span></td></tr><tr><td><code>iotbci-sudoku-pure-tcp</code></td><td><span class="badge ok">无短板（相对 MQTT/DTLS 全面不劣）</span></td><td><span class="badge ok">(none)</span></td><td><span class="badge ok">1.000x</span></td><td><span class="badge ok">0.683x</span></td><td><span class="badge ok">0.707x</span></td><td><span class="badge ok">0.707x</span></td><td><span class="badge ok">0.632x</span></td></tr></table></div><div class="card"><h2>核心对比图（evidence）</h2><svg viewBox="0 0 810 204" role="img" aria-label="overhead_ratio（越小越好）" xmlns="http://www.w3.org/2000/svg"><text x="220" y="14" fill="var(--text)" font-size="13">overhead_ratio（越小越好）</text><line x1="220" y1="16" x2="220" y2="184" stroke="rgba(17,24,39,.14)" /><rect x="220" y="22" width="189" height="18" fill="var(--coap)" rx="6" opacity="0.92" /><rect x="220" y="48" width="225" height="18" fill="var(--dtls)" rx="6" opacity="0.92" /><rect x="220" y="74" width="260" height="18" fill="var(--sudoku2)" rx="6" opacity="0.92" /><rect x="220" y="100" width="520" height="18" fill="var(--sudoku)" rx="6" opacity="0.92" /><rect x="220" y="126" width="507" height="18" fill="var(--mqtt)" rx="6" opacity="0.92" /><rect x="220" y="152" width="194" height="18" fill="var(--aead)" rx="6" opacity="0.92" /><rect x="20" y="26" width="10" height="10" fill="var(--coap)" rx="3" opacity="0.92" /><text x="36" y="36" text-anchor="start" fill="var(--text)" font-size="12">coap-udp</text><text x="417" y="36" fill="var(--muted)" font-size="12">1.043</text><rect x="20" y="52" width="10" height="10" fill="var(--dtls)" rx="3" opacity="0.92" /><text x="36" y="62" text-anchor="start" fill="var(--text)" font-size="12">dtls-ecdhe-ecdsa-aes256cbc</text><text x="453" y="62" fill="var(--muted)" font-size="12">1.239</text><rect x="20" y="78" width="10" height="10" fill="var(--sudoku2)" rx="3" opacity="0.92" /><text x="36" y="88" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-packed-tcp</text><text x="488" y="88" fill="var(--muted)" font-size="12">1.434</text><rect x="20" y="104" width="10" height="10" fill="var(--sudoku)" rx="3" opacity="0.92" /><text x="36" y="114" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-pure-tcp</text><text x="748" y="114" fill="var(--muted)" font-size="12">2.858</text><rect x="20" y="130" width="10" height="10" fill="var(--mqtt)" rx="3" opacity="0.92" /><text x="36" y="140" text-anchor="start" fill="var(--text)" font-size="12">mqtt-3.1.1-qos0-tls</text><text x="735" y="140" fill="var(--muted)" font-size="12">2.788</text><rect x="20" y="156" width="10" height="10" fill="var(--aead)" rx="3" opacity="0.92" /><text x="36" y="166" text-anchor="start" fill="var(--text)" font-size="12">pure-aead-tcp</text><text x="422" y="166" fill="var(--muted)" font-size="12">1.070</text></svg><svg viewBox="0 0 810 204" role="img" aria-label="avg_rtt_ms（越小越好）" xmlns="http://www.w3.org/2000/svg"><text x="220" y="14" fill="var(--text)" font-size="13">avg_rtt_ms（越小越好）</text><line x1="220" y1="16" x2="220" y2="184" stroke="rgba(17,24,39,.14)" /><rect x="220" y="22" width="123" height="18" fill="var(--coap)" rx="6" opacity="0.92" /><rect x="220" y="48" width="256" height="18" fill="var(--dtls)" rx="6" opacity="0.92" /><rect x="220" y="74" width="154" height="18" fill="var(--sudoku2)" rx="6" opacity="0.92" /><rect x="220" y="100" width="175" height="18" fill="var(--sudoku)" rx="6" opacity="0.92" /><rect x="220" y="126" width="520" height="18" fill="var(--mqtt)" rx="6" opacity="0.92" /><rect x="220" y="152" width="152" height="18" fill="var(--aead)" rx="6" opacity="0.92" /><rect x="20" y="26" width="10" height="10" fill="var(--coap)" rx="3" opacity="0.92" /><text x="36" y="36" text-anchor="start" fill="var(--text)" font-size="12">coap-udp</text><text x="351" y="36" fill="var(--muted)" font-size="12">0.020 ms</text><rect x="20" y="52" width="10" height="10" fill="var(--dtls)" rx="3" opacity="0.92" /><text x="36" y="62" text-anchor="start" fill="var(--text)" font-size="12">dtls-ecdhe-ecdsa-aes256cbc</text><text x="484" y="62" fill="var(--muted)" font-size="12">0.042 ms</text><rect x="20" y="78" width="10" height="10" fill="var(--sudoku2)" rx="3" opacity="0.92" /><text x="36" y="88" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-packed-tcp</text><text x="382" y="88" fill="var(--muted)" font-size="12">0.025 ms</text><rect x="20" y="104" width="10" height="10" fill="var(--sudoku)" rx="3" opacity="0.92" /><text x="36" y="114" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-pure-tcp</text><text x="403" y="114" fill="var(--muted)" font-size="12">0.029 ms</text><rect x="20" y="130" width="10" height="10" fill="var(--mqtt)" rx="3" opacity="0.92" /><text x="36" y="140" text-anchor="start" fill="var(--text)" font-size="12">mqtt-3.1.1-qos0-tls</text><text x="748" y="140" fill="var(--muted)" font-size="12">0.085 ms</text><rect x="20" y="156" width="10" height="10" fill="var(--aead)" rx="3" opacity="0.92" /><text x="36" y="166" text-anchor="start" fill="var(--text)" font-size="12">pure-aead-tcp</text><text x="380" y="166" fill="var(--muted)" font-size="12">0.025 ms</text></svg><svg viewBox="0 0 810 204" role="img" aria-label="peak_heap_inuse（越小越省内存）" xmlns="http://www.w3.org/2000/svg"><text x="220" y="14" fill="var(--text)" font-size="13">peak_heap_inuse（越小越省内存）</text><line x1="220" y1="16" x2="220" y2="184" stroke="rgba(17,24,39,.14)" /><rect x="220" y="22" width="484" height="18" fill="var(--coap)" rx="6" opacity="0.92" /><rect x="220" y="48" width="473" height="18" fill="var(--dtls)" rx="6" opacity="0.92" /><rect x="220" y="74" width="366" height="18" fill="var(--sudoku2)" rx="6" opacity="0.92" /><rect x="220" y="100" width="299" height="18" fill="var(--sudoku)" rx="6" opacity="0.92" /><rect x="220" y="126" width="520" height="18" fill="var(--mqtt)" rx="6" opacity="0.92" /><rect x="220" y="152" width="113" height="18" fill="var(--aead)" rx="6" opacity="0.92" /><rect x="20" y="26" width="10" height="10" fill="var(--coap)" rx="3" opacity="0.92" /><text x="36" y="36" text-anchor="start" fill="var(--text)" font-size="12">coap-udp</text><text x="712" y="36" fill="var(--muted)" font-size="12">4.55 MiB</text><rect x="20" y="52" width="10" height="10" fill="var(--dtls)" rx="3" opacity="0.92" /><text x="36" y="62" text-anchor="start" fill="var(--text)" font-size="12">dtls-ecdhe-ecdsa-aes256cbc</text><text x="701" y="62" fill="var(--muted)" font-size="12">4.45 MiB</text><rect x="20" y="78" width="10" height="10" fill="var(--sudoku2)" rx="3" opacity="0.92" /><text x="36" y="88" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-packed-tcp</text><text x="594" y="88" fill="var(--muted)" font-size="12">3.45 MiB</text><rect x="20" y="104" width="10" height="10" fill="var(--sudoku)" rx="3" opacity="0.92" /><text x="36" y="114" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-pure-tcp</text><text x="527" y="114" fill="var(--muted)" font-size="12">2.81 MiB</text><rect x="20" y="130" width="10" height="10" fill="var(--mqtt)" rx="3" opacity="0.92" /><text x="36" y="140" text-anchor="start" fill="var(--text)" font-size="12">mqtt-3.1.1-qos0-tls</text><text x="748" y="140" fill="var(--muted)" font-size="12">4.89 MiB</text><rect x="20" y="156" width="10" height="10" fill="var(--aead)" rx="3" opacity="0.92" /><text x="36" y="166" text-anchor="start" fill="var(--text)" font-size="12">pure-aead-tcp</text><text x="341" y="166" fill="var(--muted)" font-size="12">1.07 MiB</text></svg><svg viewBox="0 0 810 204" role="img" aria-label="wire_entropy（越大越随机）" xmlns="http://www.w3.org/2000/svg"><text x="220" y="14" fill="var(--text)" font-size="13">wire_entropy（越大越随机）</text><line x1="220" y1="16" x2="220" y2="184" stroke="rgba(17,24,39,.14)" /><rect x="220" y="22" width="519" height="18" fill="var(--coap)" rx="6" opacity="0.92" /><rect x="220" y="48" width="517" height="18" fill="var(--dtls)" rx="6" opacity="0.92" /><rect x="220" y="74" width="390" height="18" fill="var(--sudoku2)" rx="6" opacity="0.92" /><rect x="220" y="100" width="379" height="18" fill="var(--sudoku)" rx="6" opacity="0.92" /><rect x="220" y="126" width="515" height="18" fill="var(--mqtt)" rx="6" opacity="0.92" /><rect x="220" y="152" width="520" height="18" fill="var(--aead)" rx="6" opacity="0.92" /><rect x="20" y="26" width="10" height="10" fill="var(--coap)" rx="3" opacity="0.92" /><text x="36" y="36" text-anchor="start" fill="var(--text)" font-size="12">coap-udp</text><text x="747" y="36" fill="var(--muted)" font-size="12">7.983</text><rect x="20" y="52" width="10" height="10" fill="var(--dtls)" rx="3" opacity="0.92" /><text x="36" y="62" text-anchor="start" fill="var(--text)" font-size="12">dtls-ecdhe-ecdsa-aes256cbc</text><text x="745" y="62" fill="var(--muted)" font-size="12">7.965</text><rect x="20" y="78" width="10" height="10" fill="var(--sudoku2)" rx="3" opacity="0.92" /><text x="36" y="88" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-packed-tcp</text><text x="618" y="88" fill="var(--muted)" font-size="12">6.010</text><rect x="20" y="104" width="10" height="10" fill="var(--sudoku)" rx="3" opacity="0.92" /><text x="36" y="114" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-pure-tcp</text><text x="607" y="114" fill="var(--muted)" font-size="12">5.841</text><rect x="20" y="130" width="10" height="10" fill="var(--mqtt)" rx="3" opacity="0.92" /><text x="36" y="140" text-anchor="start" fill="var(--text)" font-size="12">mqtt-3.1.1-qos0-tls</text><text x="743" y="140" fill="var(--muted)" font-size="12">7.928</text><rect x="20" y="156" width="10" height="10" fill="var(--aead)" rx="3" opacity="0.92" /><text x="36" y="166" text-anchor="start" fill="var(--text)" font-size="12">pure-aead-tcp</text><text x="748" y="166" fill="var(--muted)" font-size="12">7.996</text></svg><svg viewBox="0 0 810 204" role="img" aria-label="wire_ascii_ratio（0x20..0x7e 占比）" xmlns="http://www.w3.org/2000/svg"><text x="220" y="14" fill="var(--text)" font-size="13">wire_ascii_ratio（0x20..0x7e 占比）</text><line x1="220" y1="16" x2="220" y2="184" stroke="rgba(17,24,39,.14)" /><rect x="220" y="22" width="194" height="18" fill="var(--coap)" rx="6" opacity="0.92" /><rect x="220" y="48" width="190" height="18" fill="var(--dtls)" rx="6" opacity="0.92" /><rect x="220" y="74" width="0" height="18" fill="var(--sudoku2)" rx="6" opacity="0.92" /><rect x="220" y="100" width="520" height="18" fill="var(--sudoku)" rx="6" opacity="0.92" /><rect x="220" y="126" width="185" height="18" fill="var(--mqtt)" rx="6" opacity="0.92" /><rect x="220" y="152" width="194" height="18" fill="var(--aead)" rx="6" opacity="0.92" /><rect x="20" y="26" width="10" height="10" fill="var(--coap)" rx="3" opacity="0.92" /><text x="36" y="36" text-anchor="start" fill="var(--text)" font-size="12">coap-udp</text><text x="422" y="36" fill="var(--muted)" font-size="12">36.85%</text><rect x="20" y="52" width="10" height="10" fill="var(--dtls)" rx="3" opacity="0.92" /><text x="36" y="62" text-anchor="start" fill="var(--text)" font-size="12">dtls-ecdhe-ecdsa-aes256cbc</text><text x="418" y="62" fill="var(--muted)" font-size="12">36.04%</text><rect x="20" y="78" width="10" height="10" fill="var(--sudoku2)" rx="3" opacity="0.92" /><text x="36" y="88" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-packed-tcp</text><text x="228" y="88" fill="var(--muted)" font-size="12">0.00%</text><rect x="20" y="104" width="10" height="10" fill="var(--sudoku)" rx="3" opacity="0.92" /><text x="36" y="114" text-anchor="start" fill="var(--text)" font-size="12">iotbci-sudoku-pure-tcp</text><text x="748" y="114" fill="var(--muted)" font-size="12">98.44%</text><rect x="20" y="130" width="10" height="10" fill="var(--mqtt)" rx="3" opacity="0.92" /><text x="36" y="140" text-anchor="start" fill="var(--text)" font-size="12">mqtt-3.1.1-qos0-tls</text><text x="413" y="140" fill="var(--muted)" font-size="12">35.03%</text><rect x="20" y="156" width="10" height="10" fill="var(--aead)" rx="3" opacity="0.92" /><text x="36" y="166" text-anchor="start" fill="var(--text)" font-size="12">pure-aead-tcp</text><text x="422" y="166" fill="var(--muted)" font-size="12">36.81%</text></svg></div><div class="card"><h2>内存开销分析（为什么这些数可信）</h2><ul><li>采样方法：bench 内部以固定周期采样 <code>runtime.MemStats</code>，并取近似峰值（见 <code>internal/bench/mem_sampler.go</code>）。</li><li><code>peak_heap_inuse</code>：堆上正在使用的对象总量（越小越适合小内存设备）。</li><li><code>peak_heap_alloc</code>：累计分配的近似峰值快照（用于定位“是否频繁分配/回收”导致 GC 抖动）。</li><li><code>peak_sys</code>：Go runtime 向 OS 申请的总内存（包含堆、栈、运行时元数据等）。</li></ul><div class="small">注意：这是“采样近似值”，不是 pprof 精确剖析；用于月报/对比趋势足够，论文写作需注明误差来源。</div></div><div class="card"><h2>外观直方图：<code>coap-udp</code></h2><div class="grid"><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_size_bins_log2（写入尺寸 log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_size_bins_log2（写入尺寸 log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">10000</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="18" width="576" height="170" fill="var(--pad)" rx="3" /><text x="334.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">8</text></svg><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">9998</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="18" width="576" height="170" fill="var(--pad)" rx="3" /><text x="334.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">0</text></svg></div><div class="small">提示：这些 bins 来自 bench 的 CountingConn/CountingPacketConn 记录写调用；用于论文的“包长/时序特征”侧写。</div></div><div class="card"><h2>外观直方图：<code>dtls-ecdhe-ecdsa-aes256cbc</code></h2><div class="grid"><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_size_bins_log2（写入尺寸 log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_size_bins_log2（写入尺寸 log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">10000</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="188" width="112" height="0" fill="var(--pad)" rx="3" /><rect x="162" y="188" width="112" height="0" fill="var(--pad)" rx="3" /><rect x="278" y="188" width="112" height="0" fill="var(--pad)" rx="3" /><rect x="394" y="18" width="112" height="170" fill="var(--pad)" rx="3" /><rect x="510" y="188" width="112" height="0" fill="var(--pad)" rx="3" /><text x="102.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">5</text><text x="218.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">6</text><text x="334.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">7</text><text x="450.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">8</text><text x="566.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">10</text></svg><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">10005</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="18" width="286" height="170" fill="var(--pad)" rx="3" /><rect x="336" y="188" width="286" height="0" fill="var(--pad)" rx="3" /><text x="189.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">0</text><text x="479.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">1</text></svg></div><div class="small">提示：这些 bins 来自 bench 的 CountingConn/CountingPacketConn 记录写调用；用于论文的“包长/时序特征”侧写。</div></div><div class="card"><h2>外观直方图：<code>iotbci-sudoku-packed-tcp</code></h2><div class="grid"><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_size_bins_log2（写入尺寸 log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_size_bins_log2（写入尺寸 log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">10002</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="188" width="189" height="0" fill="var(--pad)" rx="3" /><rect x="239" y="188" width="189" height="0" fill="var(--pad)" rx="3" /><rect x="432" y="18" width="189" height="170" fill="var(--pad)" rx="3" /><text x="140.5" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">5</text><text x="333.5" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">7</text><text x="526.5" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">8</text></svg><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">10004</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="18" width="576" height="170" fill="var(--pad)" rx="3" /><text x="334.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">0</text></svg></div><div class="small">提示：这些 bins 来自 bench 的 CountingConn/CountingPacketConn 记录写调用；用于论文的“包长/时序特征”侧写。</div></div><div class="card"><h2>外观直方图：<code>iotbci-sudoku-pure-tcp</code></h2><div class="grid"><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_size_bins_log2（写入尺寸 log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_size_bins_log2（写入尺寸 log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">5001</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="188" width="112" height="0" fill="var(--pad)" rx="3" /><rect x="162" y="188" width="112" height="0" fill="var(--pad)" rx="3" /><rect x="278" y="188" width="112" height="0" fill="var(--pad)" rx="3" /><rect x="394" y="18" width="112" height="170" fill="var(--pad)" rx="3" /><rect x="510" y="18" width="112" height="170" fill="var(--pad)" rx="3" /><text x="102.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">5</text><text x="218.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">6</text><text x="334.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">7</text><text x="450.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">8</text><text x="566.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">10</text></svg><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">9999</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="18" width="189" height="170" fill="var(--pad)" rx="3" /><rect x="239" y="188" width="189" height="0" fill="var(--pad)" rx="3" /><rect x="432" y="188" width="189" height="0" fill="var(--pad)" rx="3" /><text x="140.5" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">0</text><text x="333.5" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">1</text><text x="526.5" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">2</text></svg></div><div class="small">提示：这些 bins 来自 bench 的 CountingConn/CountingPacketConn 记录写调用；用于论文的“包长/时序特征”侧写。</div></div><div class="card"><h2>外观直方图：<code>mqtt-3.1.1-qos0-tls</code></h2><div class="grid"><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_size_bins_log2（写入尺寸 log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_size_bins_log2（写入尺寸 log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">60020</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="18" width="92" height="170" fill="var(--pad)" rx="3" /><rect x="142" y="188" width="92" height="0" fill="var(--pad)" rx="3" /><rect x="238" y="188" width="92" height="0" fill="var(--pad)" rx="3" /><rect x="334" y="132" width="92" height="56" fill="var(--pad)" rx="3" /><rect x="430" y="188" width="92" height="0" fill="var(--pad)" rx="3" /><rect x="526" y="188" width="92" height="0" fill="var(--pad)" rx="3" /><text x="92.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">4</text><text x="188.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">5</text><text x="284.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">6</text><text x="380.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">8</text><text x="476.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">10</text><text x="572.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">11</text></svg><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">80006</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="18" width="189" height="170" fill="var(--pad)" rx="3" /><rect x="239" y="188" width="189" height="0" fill="var(--pad)" rx="3" /><rect x="432" y="188" width="189" height="0" fill="var(--pad)" rx="3" /><text x="140.5" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">0</text><text x="333.5" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">1</text><text x="526.5" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">2</text></svg></div><div class="small">提示：这些 bins 来自 bench 的 CountingConn/CountingPacketConn 记录写调用；用于论文的“包长/时序特征”侧写。</div></div><div class="card"><h2>外观直方图：<code>pure-aead-tcp</code></h2><div class="grid"><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_size_bins_log2（写入尺寸 log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_size_bins_log2（写入尺寸 log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">10000</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="18" width="576" height="170" fill="var(--pad)" rx="3" /><text x="334.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">8</text></svg><svg viewBox="0 0 640 220" role="img" aria-label="wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）" xmlns="http://www.w3.org/2000/svg"><line x1="44" y1="18" x2="44" y2="188" stroke="rgba(17,24,39,.14)" /><line x1="44" y1="188" x2="624" y2="188" stroke="rgba(17,24,39,.14)" /><text x="44" y="14" fill="var(--text)" font-size="13">wire_write_interarrival_ms_bins_log2（写入间隔 ms log2 bins）</text><text x="36" y="28" text-anchor="end" fill="var(--muted)" font-size="11">9998</text><text x="36" y="188" text-anchor="end" fill="var(--muted)" font-size="11">0</text><rect x="46" y="18" width="576" height="170" fill="var(--pad)" rx="3" /><text x="334.0" y="206" text-anchor="middle" fill="var(--muted)" font-size="12">0</text></svg></div><div class="small">提示：这些 bins 来自 bench 的 CountingConn/CountingPacketConn 记录写调用；用于论文的“包长/时序特征”侧写。</div></div><div class="card"><h2>逐协议过程说明（如何运行起来 & 为什么能证明成功）</h2><div class="small">该部分是“可复制到月报/论文”的过程证据链摘要；更底层细节可展开后面的源码。</div></div><div class="card"><h2><code>iotbci-sudoku-pure-tcp</code> — IoTBCI + Sudoku（pure downlink，ASCII 外观优先）</h2><table><tr><th>transport</th><td><code>TCP</code></td></tr><tr><th>tcp_ports</th><td><code>[59128]</code></td></tr><tr><th>udp_ports</th><td><code>[]</code></td></tr><tr><th>messages</th><td>5000</td></tr><tr><th>payload_size</th><td>256 B</td></tr><tr><th>overhead_ratio</th><td>2.858</td></tr><tr><th>avg/p95_rtt</th><td>0.027 ms / 0.069 ms</td></tr><tr><th>wire_entropy</th><td>5.839</td></tr><tr><th>wire_ascii_ratio</th><td>98.39%</td></tr></table><h3>流程</h3><ul><li>TCP 回环：server Listen → client Dial。</li><li>握手：Ed25519 证书 + X25519 临时密钥交换；握手帧可选 PSK-AEAD 保护（抗探测）。</li><li>会话：AEAD record 传输；外观层：uplink=PackedConn（6-bit groups）；downlink=纯 Sudoku（非 packed）。</li><li>bench/evidence 的 pure 场景默认关闭 padding（padding_min/max=0）来减少额外随机数开销，体现纯数独编码的吞吐/时延上限。</li><li>业务：client 发送固定 payload（0..255 循环字节）→ server 原样回显 → client 校验一致性。</li></ul><h3>验证点</h3><ul><li>握手成功且未超时（失败会直接返回 error）。</li><li>echo payload 与发送 payload 完全一致（bytes.Equal）。</li><li>外观：wire_ascii_ratio≈1（可打印占比很高，符合 prefer_ascii 目标）。</li></ul><h3>相关实现（仓库内路径）</h3><ul><li><code>internal/bench/run_iotbci_sudoku_net.go</code></li><li><code>pkg/iotbci/handshake_client.go</code></li><li><code>pkg/iotbci/handshake_server.go</code></li><li><code>pkg/obfs/sudoku/*</code></li></ul></div><div class="card"><h2><code>iotbci-sudoku-packed-tcp</code> — IoTBCI + Sudoku（双向 packed，吞吐/时延优先 profile）</h2><table><tr><th>transport</th><td><code>TCP</code></td></tr><tr><th>tcp_ports</th><td><code>[59130]</code></td></tr><tr><th>udp_ports</th><td><code>[]</code></td></tr><tr><th>messages</th><td>5000</td></tr><tr><th>payload_size</th><td>256 B</td></tr><tr><th>overhead_ratio</th><td>1.434</td></tr><tr><th>avg/p95_rtt</th><td>0.024 ms / 0.045 ms</td></tr><tr><th>wire_entropy</th><td>6.010</td></tr><tr><th>wire_ascii_ratio</th><td>0.00%</td></tr></table><h3>流程</h3><ul><li>TCP 回环：server Listen → client Dial。</li><li>握手同上；外观层：uplink=PackedConn；downlink=PackedConn（6-bit groups）。</li><li>packed：把明文按 6-bit group 输出为 hint bytes；bench/evidence 的 packed 场景默认关闭 padding（padding_min/max=0）来展示吞吐/时延上限。</li><li>业务：client 发送固定 payload → server 回显 → client 校验一致性。</li></ul><h3>验证点</h3><ul><li>echo payload 与发送 payload 完全一致（bytes.Equal）。</li><li>外观受 CustomTable pattern 影响（hint bytes 可打印比例决定 wire_ascii_ratio；开启 padding 会抬高该值）。</li></ul><h3>相关实现（仓库内路径）</h3><ul><li><code>internal/bench/run_iotbci_sudoku_net.go</code></li><li><code>pkg/iotbci/obfs_conn.go</code></li><li><code>pkg/obfs/sudoku/packed.go</code></li></ul></div><div class="card"><h2><code>pure-aead-tcp</code> — 纯 AEAD record（无 Sudoku 外观层）</h2><table><tr><th>transport</th><td><code>TCP</code></td></tr><tr><th>tcp_ports</th><td><code>[59132]</code></td></tr><tr><th>udp_ports</th><td><code>[]</code></td></tr><tr><th>messages</th><td>5000</td></tr><tr><th>payload_size</th><td>256 B</td></tr><tr><th>overhead_ratio</th><td>1.070</td></tr><tr><th>avg/p95_rtt</th><td>0.023 ms / 0.040 ms</td></tr><tr><th>wire_entropy</th><td>7.996</td></tr><tr><th>wire_ascii_ratio</th><td>36.81%</td></tr></table><h3>流程</h3><ul><li>TCP 回环：server Listen → client Dial。</li><li>双方用 PSK 派生 key/salt；在 RecordConn 上写入/读取 record。</li><li>业务：client 发送固定 payload → server 回显 → client 校验一致性。</li></ul><h3>验证点</h3><ul><li>echo payload 与发送 payload 完全一致（bytes.Equal）。</li><li>外观接近随机：wire_entropy≈8，wire_ascii_ratio≈95/256（随机字节落在可打印区间的期望）。</li></ul><h3>相关实现（仓库内路径）</h3><ul><li><code>internal/bench/run_pure_aead_net.go</code></li><li><code>pkg/iotbci/recordconn.go</code></li></ul></div><div class="card"><h2><code>dtls-ecdhe-ecdsa-aes256cbc</code> — DTLS 基线（UDP + 证书/ECDHE + AES-256-CBC）</h2><table><tr><th>transport</th><td><code>UDP</code></td></tr><tr><th>tcp_ports</th><td><code>[]</code></td></tr><tr><th>udp_ports</th><td><code>[52213]</code></td></tr><tr><th>messages</th><td>5000</td></tr><tr><th>payload_size</th><td>256 B</td></tr><tr><th>overhead_ratio</th><td>1.239</td></tr><tr><th>avg/p95_rtt</th><td>0.041 ms / 0.067 ms</td></tr><tr><th>wire_entropy</th><td>7.965</td></tr><tr><th>wire_ascii_ratio</th><td>36.03%</td></tr></table><h3>流程</h3><ul><li>UDP 回环：server ListenPacket → client DialUDP。</li><li>DTLS 握手：自签 CA 签发的证书 + ECDHE key exchange + AES-256-CBC。</li><li>业务：client 写 payload → server 读满后回显 → client 读满并校验一致性。</li></ul><h3>验证点</h3><ul><li>DTLS 握手成功（pion/dtls 返回 conn）。</li><li>echo payload 与发送 payload 完全一致（bytes.Equal）。</li><li>证明 UDP 信息链路闭环：udp_ports 非空（由 ready callback 回填）。</li></ul><h3>相关实现（仓库内路径）</h3><ul><li><code>internal/bench/run_dtls_cert.go</code></li></ul></div><div class="card"><h2><code>coap-udp</code> — CoAP 基线（UDP CON/ACK，POST /bci）</h2><table><tr><th>transport</th><td><code>UDP</code></td></tr><tr><th>tcp_ports</th><td><code>[]</code></td></tr><tr><th>udp_ports</th><td><code>[53563]</code></td></tr><tr><th>messages</th><td>5000</td></tr><tr><th>payload_size</th><td>256 B</td></tr><tr><th>overhead_ratio</th><td>1.043</td></tr><tr><th>avg/p95_rtt</th><td>0.038 ms / 0.041 ms</td></tr><tr><th>wire_entropy</th><td>7.983</td></tr><tr><th>wire_ascii_ratio</th><td>36.85%</td></tr></table><h3>流程</h3><ul><li>UDP 回环：server ListenPacket → client DialUDP。</li><li>client 发送 CON POST /bci（含 token/msgID/payload）。</li><li>server 校验报文头/路径，回 ACK Content，并回显原 payload。</li><li>client 解析 response，并逐字节比对回显 payload。</li></ul><h3>验证点</h3><ul><li>request/response 字段符合预期（version/type/code/path/token/msgID）。</li><li>echo payload 长度与内容一致（逐字节比对）。</li></ul><h3>相关实现（仓库内路径）</h3><ul><li><code>internal/bench/run_coap.go</code></li></ul></div><div class="card"><h2><code>mqtt-3.1.1-qos0-tls</code> — MQTT 基线（TCP + TLS(证书/ECDHE) + QoS0，内置 broker）</h2><table><tr><th>transport</th><td><code>TCP</code></td></tr><tr><th>tcp_ports</th><td><code>[59140]</code></td></tr><tr><th>udp_ports</th><td><code>[]</code></td></tr><tr><th>messages</th><td>5000</td></tr><tr><th>payload_size</th><td>256 B</td></tr><tr><th>overhead_ratio</th><td>2.788</td></tr><tr><th>avg/p95_rtt</th><td>0.082 ms / 0.138 ms</td></tr><tr><th>wire_entropy</th><td>7.928</td></tr><tr><th>wire_ascii_ratio</th><td>35.04%</td></tr></table><h3>流程</h3><ul><li>TCP 回环：启动内置 broker（TLS server）。</li><li>TLS 握手：自签 CA 签发的证书 + TLS 1.3(ECDHE) 建立加密通道。</li><li>server client：订阅 bci/req，收到后 publish 到 bci/resp。</li><li>device client：publish 到 bci/req，订阅 bci/resp 并等待回显。</li><li>双方逐字节比对回显 payload。</li></ul><h3>验证点</h3><ul><li>topic 流程正确（req/resp 主题匹配）。</li><li>echo payload 长度与内容一致（逐字节比对）。</li></ul><h3>相关实现（仓库内路径）</h3><ul><li><code>internal/bench/run_mqtt.go</code></li></ul></div><div class="card"><h2>补充：cmd/iotbci-bench（部分场景用 net.Pipe 隔离 OS 噪声）</h2><table><tr><th>scenario</th><th>overhead_ratio</th><th>avg_rtt_ms</th><th>p95_rtt_ms</th><th>wire_entropy</th><th>wire_ascii_ratio</th><th>peak_heap_alloc</th><th>peak_heap_inuse</th><th>peak_sys</th><th>wire_bps</th><th>payload_bps</th></tr><tr><td><code>coap-udp</code></td><td>1.043</td><td>0.020</td><td>0.038</td><td>7.983</td><td>36.85%</td><td>3.68 MiB</td><td>4.49 MiB</td><td>11.77 MiB</td><td>25.13 MiB/s</td><td>24.10 MiB/s</td></tr><tr><td><code>dtls-ecdhe-ecdsa-aes256cbc</code></td><td>1.239</td><td>0.056</td><td>0.110</td><td>7.965</td><td>36.02%</td><td>3.55 MiB</td><td>4.50 MiB</td><td>11.77 MiB</td><td>10.69 MiB/s</td><td>8.63 MiB/s</td></tr><tr><td><code>iotbci-sudoku-packed</code></td><td>1.434</td><td>0.009</td><td>0.011</td><td>6.010</td><td>0.00%</td><td>2.41 MiB</td><td>3.20 MiB</td><td>11.27 MiB</td><td>77.34 MiB/s</td><td>53.93 MiB/s</td></tr><tr><td><code>iotbci-sudoku-pure</code></td><td>2.858</td><td>0.011</td><td>0.015</td><td>5.839</td><td>98.37%</td><td>1.90 MiB</td><td>2.62 MiB</td><td>6.71 MiB</td><td>116.61 MiB/s</td><td>40.80 MiB/s</td></tr><tr><td><code>mqtt-3.1.1-qos0-tls</code></td><td>2.788</td><td>0.084</td><td>0.148</td><td>7.928</td><td>35.04%</td><td>3.69 MiB</td><td>4.93 MiB</td><td>12.02 MiB</td><td>16.06 MiB/s</td><td>5.76 MiB/s</td></tr><tr><td><code>pure-aead</code></td><td>1.070</td><td>0.008</td><td>0.012</td><td>7.996</td><td>36.81%</td><td>461.93 KiB</td><td>1016.00 KiB</td><td>11.27 MiB</td><td>61.85 MiB/s</td><td>57.78 MiB/s</td></tr></table></div><div class="card"><h2>性能 Guard（bench 中位数）</h2><table><tr><th>sudoku mode</th><th>RTT guard</th><th>RTT(ms)</th><th>Memory guard</th><th>peak_heap_inuse</th><th>overall</th></tr><tr><td><code>iotbci-sudoku-packed</code></td><td><span class="badge ok">PASS</span></td><td>0.0089 (dtls=0.0559, mqtt=0.0843)</td><td><span class="badge ok">PASS</span></td><td>3.20 MiB (dtls=4.50 MiB, mqtt=4.93 MiB)</td><td><span class="badge ok">PASS</span></td></tr><tr><td><code>iotbci-sudoku-pure</code></td><td><span class="badge ok">PASS</span></td><td>0.0113 (dtls=0.0559, mqtt=0.0843)</td><td><span class="badge ok">PASS</span></td><td>2.62 MiB (dtls=4.50 MiB, mqtt=4.93 MiB)</td><td><span class="badge ok">PASS</span></td></tr></table><div class="small">Guard rule: Sudoku 的 avg_rtt 与 peak_heap_inuse 必须同时低于 DTLS 和 MQTT（overhead 可高）。</div></div><div class="card"><h2>性能 Guard 稳定性（bench 每次运行）</h2><table><tr><th>run</th><th><code>iotbci-sudoku-pure</code></th><th><code>iotbci-sudoku-packed</code></th><th>all pass</th></tr><tr><td><code>run1</code></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td></tr><tr><td><code>run2</code></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td></tr><tr><td><code>run3</code></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td><td><span class="badge ok">PASS</span></td></tr><tr><td><b>pass count</b></td><td>3/3</td><td>3/3</td><td><b>3/3</b></td></tr></table><div class="small">用于验证“各 benchmark 得出相同结论”：每次运行都检查 Sudoku pure/packed 是否同时满足 RTT+内存双 guard。</div></div><div class="card"><h2>综合评分（BCI score）：bench</h2><div class="small">评分口径：按每个指标在本表内归一化到 best=1，然后做加权几何平均（分数越大越好）；权重 rtt/tp/heap/calls=0.35/0.35/0.15/0.15。<br/>不计入：overhead_ratio / wire_bytes_total。</div><table><tr><th>rank</th><th>scenario</th><th>score</th><th>rtt</th><th>tp</th><th>heap</th><th>calls</th></tr><tr><td>1</td><td><code>pure-aead</code></td><td>0.9410</td><td>1.0000</td><td>1.0000</td><td>1.0000</td><td>0.6667</td></tr><tr><td>2</td><td><code>iotbci-sudoku-packed</code></td><td>0.8028</td><td>0.9456</td><td>0.9334</td><td>0.3098</td><td>0.9994</td></tr><tr><td>3</td><td><code>iotbci-sudoku-pure</code></td><td>0.6884</td><td>0.7399</td><td>0.7060</td><td>0.3780</td><td>0.9994</td></tr><tr><td>4</td><td><code>coap-udp</code></td><td>0.4333</td><td>0.4199</td><td>0.4170</td><td>0.2209</td><td>1.0000</td></tr><tr><td>5</td><td><code>dtls-ecdhe-ecdsa-aes256cbc</code></td><td>0.2108</td><td>0.1498</td><td>0.1493</td><td>0.2205</td><td>0.9992</td></tr><tr><td>6</td><td><code>mqtt-3.1.1-qos0-tls</code></td><td>0.1222</td><td>0.0994</td><td>0.0997</td><td>0.2013</td><td>0.1931</td></tr></table></div><div class="card"><h2>短板效应分析：Sudoku vs MQTT/DTLS（bench）</h2><div class="small">短板效应：把 Sudoku 的关键性能指标与 baseline（MQTT/DTLS）里最优者对比，找出“最拖后腿”的那一项。</div><table><tr><th>scenario</th><th>结论</th><th>短板指标</th><th>相对 best baseline 的劣势倍数</th><th>rtt</th><th>tp</th><th>duration</th><th>heap</th></tr><tr><td><code>iotbci-sudoku-packed</code></td><td><span class="badge ok">无短板（相对 MQTT/DTLS 全面不劣）</span></td><td><span class="badge ok">(none)</span></td><td><span class="badge ok">1.000x</span></td><td><span class="badge ok">0.158x</span></td><td><span class="badge ok">0.160x</span></td><td><span class="badge ok">0.160x</span></td><td><span class="badge ok">0.712x</span></td></tr><tr><td><code>iotbci-sudoku-pure</code></td><td><span class="badge ok">无短板（相对 MQTT/DTLS 全面不劣）</span></td><td><span class="badge ok">(none)</span></td><td><span class="badge ok">1.000x</span></td><td><span class="badge ok">0.202x</span></td><td><span class="badge ok">0.211x</span></td><td><span class="badge ok">0.211x</span></td><td><span class="badge ok">0.583x</span></td></tr></table></div><div class="card"><h2>解释：packed 模式的 wire_ascii_ratio 由什么决定？</h2><div class="small">原因：packed 模式主要线上字节来自 <code>hint bytes</code>；其可打印比例取决于 CustomTable pattern（以及是否开启 padding）。当前 bench/evidence 默认使用单一 pattern，因此不会出现会话级波动；如需轮转，可在配置中提供多个 pattern。</div><table><tr><th>pattern</th><th>unique hint bytes</th><th>hint ASCII ratio</th><th>padding pool</th><th>padding ASCII ratio</th></tr><tr><td><code>xppppxvv</code></td><td>64</td><td>0.00%</td><td>44</td><td>45.45%</td></tr></table><div class="small">结论：hint ASCII ratio 越高，整体 <code>wire_ascii_ratio</code> 越高；开启 padding 也会抬高该值。固定使用单一 pattern 时该指标在不同运行间基本稳定。</div></div><div class="card"><h2>Sudoku 好在哪 / 坏在哪（基于以上指标的可复现实证）</h2><h3>好（优势）</h3><ul><li><b>可控外观</b>：pure 模式几乎全可打印（wire_ascii_ratio≈1），packed+custom table 可把 wire_ascii_ratio 锁定在某个区间（需要轮转时可配置多个 pattern）。</li><li><b>侧写维度更丰富</b>：通过 padding rate、write call 切分、packed 6-bit group，可调节长度分布与写间隔分布（见直方图）。</li><li><b>与安全层解耦</b>：外观层在 AEAD 之外工作；pure-aead/DTLS 即使加密强，外观仍接近随机（ASCII≈95/256）。</li></ul><h3>坏（代价/风险）</h3><ul><li><b>带宽开销高</b>：Sudoku（pure/packed）overhead_ratio 明显高于 pure-aead/DTLS/CoAP（见表）。</li><li><b>实现复杂度与可解释性成本</b>：需要维护 table、probe、padding、packed framing 等；论文必须把口径/参数写清楚。</li><li><b>外观可被“识别为人为设计”</b>：例如 pure 模式 ASCII 过高、packed 的 hintMask 结构等；需要用多表轮转与统计评估来支撑“更像某类自然流量”。</li></ul></div><div class="card"><h2>“为什么能证明成功？”（验证点/过程证据链）</h2><ul><li>所有场景都以“client 发送固定 payload → server 回显 → client 接收”作为闭环；若读写失败或超时，会返回 error 并在 JSON 里缺失。</li><li>CoAP/MQTT 场景在实现中逐字节比对 echo payload（强验证）；其余场景在本仓库中也加入回显一致性校验（见对应实现文件）。</li><li>DTLS/CoAP 属于 UDP；MQTT/pure-aead/sudoku 属于 TCP（见 <code>cmd/iotbci-evidence</code> 输出中的 tcp_ports/udp_ports）。</li></ul></div><details class="card"><summary><b>bench orchestrator</b> — <code>internal/bench/run_all.go</code></summary><pre>package bench
+
+import (
+	&quot;context&quot;
+	&quot;time&quot;
+
+	&quot;github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci&quot;
+)
+
+func RunAll(ctx context.Context, repoRoot string, cfg RunConfig) (Report, error) {
+	coreBytes, err := CoreSourceBytes(repoRoot)
+	if err != nil {
+		return Report{}, err
+	}
+
+	results := make([]ProtocolResult, 0, 8)
+
+	// Pure mode targets ASCII appearance; keep padding disabled by default to reduce latency/CPU for BCI workloads.
+	r1, err := RunIoTBCISudoku(ctx, cfg, true, 0, 0)
+	if err != nil {
+		return Report{}, err
+	}
+	results = append(results, r1)
+
+	// Packed mode is meant to showcase throughput; keep padding disabled here.
+	r2, err := RunIoTBCISudoku(ctx, cfg, false, 0, 0)
+	if err != nil {
+		return Report{}, err
+	}
+	results = append(results, r2)
+
+	r3, err := RunPureAEAD(ctx, cfg, iotbci.AEADChaCha20Poly1305, &quot;bench-psk-pure-aead&quot;)
+	if err != nil {
+		return Report{}, err
+	}
+	results = append(results, r3)
+
+	r4, err := RunDTLSCertECDHE(ctx, cfg)
+	if err != nil {
+		return Report{}, err
+	}
+	results = append(results, r4)
+
+	r5, err := RunCoAP(ctx, cfg)
+	if err != nil {
+		return Report{}, err
+	}
+	results = append(results, r5)
+
+	r6, err := RunMQTT(ctx, cfg)
+	if err != nil {
+		return Report{}, err
+	}
+	results = append(results, r6)
+
+	return Report{
+		GeneratedAt:     time.Now(),
+		CoreSourceBytes: coreBytes,
+		Results:         results,
+	}, nil
+}
+</pre></details><details class="card"><summary><b>DTLS baseline (cert/ECDHE AES-256-CBC)</b> — <code>internal/bench/run_dtls_cert.go</code></summary><pre>package bench
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;crypto/tls&quot;
+	&quot;fmt&quot;
+	&quot;net&quot;
+	&quot;runtime&quot;
+	&quot;time&quot;
+
+	&quot;github.com/pion/dtls/v2&quot;
+)
+
+func RunDTLSCertECDHE(ctx context.Context, cfg RunConfig) (ProtocolResult, error) {
+	return RunDTLSCertECDHEOnUDP(ctx, cfg, &quot;127.0.0.1:0&quot;, nil)
+}
+
+func RunDTLSCertECDHEOnUDP(ctx context.Context, cfg RunConfig, listenAddr string, ready ReadyFunc) (ProtocolResult, error) {
+	if cfg.Messages &lt;= 0 {
+		cfg.Messages = 1000
+	}
+	if cfg.PayloadSize &lt;= 0 {
+		cfg.PayloadSize = 256
+	}
+
+	certs, err := newLocalCertBundle()
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+
+	// One CA issues both server/client certs, mutual authentication enabled.
+	serverCfg := &amp;dtls.Config{
+		Certificates: []tls.Certificate{certs.ServerCert},
+		ClientCAs:    certs.CAPool,
+		ClientAuth:   dtls.RequireAndVerifyClientCert,
+		CipherSuites: []dtls.CipherSuiteID{dtls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA},
+		FlightInterval: 50 * time.Millisecond,
+		MTU:            1200,
+	}
+	clientCfg := &amp;dtls.Config{
+		Certificates: []tls.Certificate{certs.ClientCert},
+		RootCAs:      certs.CAPool,
+		ServerName:   &quot;127.0.0.1&quot;,
+		CipherSuites: []dtls.CipherSuiteID{dtls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA},
+		FlightInterval: 50 * time.Millisecond,
+		MTU:            1200,
+	}
+
+	runtime.GC()
+	mem := StartMemSampler(5 * time.Millisecond)
+	start := time.Now()
+
+	clientStats := &amp;WireStats{}
+	serverStats := &amp;WireStats{}
+
+	rawPC, err := net.ListenPacket(&quot;udp&quot;, listenAddr)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer rawPC.Close()
+
+	pc := WrapPacketConn(rawPC, serverStats)
+	serverConn := newPacketConnConn(pc)
+
+	serverErr := make(chan error, 1)
+	go func() {
+		c, err := dtls.ServerWithContext(ctx, serverConn, serverCfg)
+		if err != nil {
+			serverErr &lt;- err
+			return
+		}
+		defer c.Close()
+
+		buf := make([]byte, cfg.PayloadSize)
+		for i := 0; i &lt; cfg.Messages; i++ {
+			_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+			if err := readFull(c, buf); err != nil {
+				serverErr &lt;- err
+				return
+			}
+			_ = c.SetWriteDeadline(time.Now().Add(3 * time.Second))
+			if err := writeFull(c, buf); err != nil {
+				serverErr &lt;- err
+				return
+			}
+		}
+		serverErr &lt;- nil
+	}()
+
+	raddr, ok := rawPC.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return ProtocolResult{}, fmt.Errorf(&quot;unexpected local addr type: %T&quot;, rawPC.LocalAddr())
+	}
+	if ready != nil {
+		ready(nil, []uint16{uint16(raddr.Port)})
+	}
+
+	rawClientConn, err := net.DialUDP(&quot;udp&quot;, nil, raddr)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer rawClientConn.Close()
+
+	clientCount := WrapConn(rawClientConn, clientStats)
+	c, err := dtls.ClientWithContext(ctx, clientCount, clientCfg)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer c.Close()
+
+	payload := make([]byte, cfg.PayloadSize)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+	resp := make([]byte, len(payload))
+
+	rtts := make([]time.Duration, 0, cfg.Messages)
+	warmup := rttWarmupCount(cfg.Messages)
+	for i := 0; i &lt; cfg.Messages; i++ {
+		select {
+		case &lt;-ctx.Done():
+			return ProtocolResult{}, ctx.Err()
+		default:
+		}
+		t0 := time.Now()
+		_ = c.SetWriteDeadline(time.Now().Add(3 * time.Second))
+		if err := writeFull(c, payload); err != nil {
+			return ProtocolResult{}, err
+		}
+		_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+		if err := readFull(c, resp); err != nil {
+			return ProtocolResult{}, err
+		}
+		if !bytes.Equal(resp, payload) {
+			return ProtocolResult{}, fmt.Errorf(&quot;dtls echo mismatch&quot;)
+		}
+		if i &gt;= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
+	}
+	if err := &lt;-serverErr; err != nil {
+		return ProtocolResult{}, err
+	}
+
+	peak := mem.Stop()
+	dur := time.Since(start)
+
+	wireBytes := clientStats.BytesWritten.Load() + serverStats.BytesWritten.Load()
+	payloadBytes := int64(cfg.Messages * cfg.PayloadSize * 2)
+
+	var freq [256]uint64
+	f1 := clientStats.SnapshotWrittenFreq()
+	f2 := serverStats.SnapshotWrittenFreq()
+	for i := 0; i &lt; 256; i++ {
+		freq[i] = f1[i] + f2[i]
+	}
+	bs := ComputeByteStats(freq)
+
+	avg := avgDuration(rtts)
+	p95 := percentileDuration(rtts, 0.95)
+
+	ws := summarizeWire(clientStats, serverStats)
+	durSec := dur.Seconds()
+	var payloadBps, wireBps float64
+	if durSec &gt; 0 {
+		payloadBps = float64(payloadBytes) / durSec
+		wireBps = float64(wireBytes) / durSec
+	}
+
+	return ProtocolResult{
+		Name:                          &quot;dtls-ecdhe-ecdsa-aes256cbc&quot;,
+		Messages:                      cfg.Messages,
+		PayloadSize:                   cfg.PayloadSize,
+		PayloadBytesTotal:             payloadBytes,
+		WireBytesTotal:                wireBytes,
+		OverheadRatio:                 float64(wireBytes) / float64(payloadBytes),
+		AvgRTTMillis:                  float64(avg) / float64(time.Millisecond),
+		P95RTTMillis:                  float64(p95) / float64(time.Millisecond),
+		WireWriteCalls:                ws.writeCalls,
+		WireReadCalls:                 ws.readCalls,
+		WireWriteSizeBinsLog2:         ws.writeSizeBins,
+		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
+		WireActiveDurationMillis:      ws.activeDurationMillis,
+		WireEntropy:                   bs.Entropy,
+		WireASCIIRatio:                bs.ASCIIRatio,
+		PeakHeapAllocBytes:            peak.HeapAlloc,
+		PeakHeapInuseBytes:            peak.HeapInuse,
+		PeakSysBytes:                  peak.Sys,
+		PayloadThroughputBps:          payloadBps,
+		WireThroughputBps:             wireBps,
+		DurationMillis:                float64(dur) / float64(time.Millisecond),
+	}, nil
+}
+</pre></details><details class="card"><summary><b>CoAP baseline (UDP CON/ACK)</b> — <code>internal/bench/run_coap.go</code></summary><pre>package bench
+
+import (
+	&quot;context&quot;
+	&quot;encoding/binary&quot;
+	&quot;fmt&quot;
+	&quot;net&quot;
+	&quot;runtime&quot;
+	&quot;strings&quot;
+	&quot;time&quot;
+)
+
+func RunCoAP(ctx context.Context, cfg RunConfig) (ProtocolResult, error) {
+	return RunCoAPOnUDP(ctx, cfg, &quot;127.0.0.1:0&quot;, nil)
+}
+
+func RunCoAPOnUDP(ctx context.Context, cfg RunConfig, listenAddr string, ready ReadyFunc) (ProtocolResult, error) {
+	if cfg.Messages &lt;= 0 {
+		cfg.Messages = 1000
+	}
+	if cfg.PayloadSize &lt;= 0 {
+		cfg.PayloadSize = 256
+	}
+
+	runtime.GC()
+	mem := StartMemSampler(5 * time.Millisecond)
+	start := time.Now()
+
+	clientStats := &amp;WireStats{}
+	serverStats := &amp;WireStats{}
+
+	rawPC, err := net.ListenPacket(&quot;udp&quot;, listenAddr)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer rawPC.Close()
+
+	pc := WrapPacketConn(rawPC, serverStats)
+	raddr := rawPC.LocalAddr().(*net.UDPAddr)
+
+	serverErr := make(chan error, 1)
+	go func() {
+		defer rawPC.Close()
+		buf := make([]byte, 64*1024)
+		for i := 0; i &lt; cfg.Messages; i++ {
+			_ = pc.SetReadDeadline(time.Now().Add(5 * time.Second))
+			n, addr, err := pc.ReadFrom(buf)
+			if err != nil {
+				serverErr &lt;- err
+				return
+			}
+
+			req, err := parseCoAP(buf[:n])
+			if err != nil {
+				serverErr &lt;- err
+				return
+			}
+			if req.Version != 1 || req.Type != coapTypeCON || req.Code != coapCodePOST || req.Path != &quot;bci&quot; {
+				serverErr &lt;- fmt.Errorf(&quot;unexpected coap request: v=%d type=%d code=0x%02x path=%q&quot;, req.Version, req.Type, req.Code, req.Path)
+				return
+			}
+
+			resp := coapMessage{
+				Version: 1,
+				Type:    coapTypeACK,
+				Code:    coapCodeContent,
+				MsgID:   req.MsgID,
+				Token:   req.Token,
+				Path:    &quot;&quot;,
+				Payload: req.Payload,
+			}
+			out := make([]byte, 0, 4+len(req.Token)+1+len(req.Payload))
+			out = appendCoAP(out, resp)
+			_ = pc.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if _, err := pc.WriteTo(out, addr); err != nil {
+				serverErr &lt;- err
+				return
+			}
+		}
+		serverErr &lt;- nil
+	}()
+
+	if ready != nil {
+		ready(nil, []uint16{uint16(raddr.Port)})
+	}
+
+	rawConn, err := net.DialUDP(&quot;udp&quot;, nil, raddr)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer rawConn.Close()
+
+	conn := WrapConn(rawConn, clientStats)
+
+	payload := make([]byte, cfg.PayloadSize)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+
+	warmup := rttWarmupCount(cfg.Messages)
+	rtts := make([]time.Duration, 0, cfg.Messages)
+	buf := make([]byte, 64*1024)
+	var msgID uint16 = 1
+	token := []byte{0x01, 0x02, 0x03, 0x04}
+
+	for i := 0; i &lt; cfg.Messages; i++ {
+		select {
+		case &lt;-ctx.Done():
+			return ProtocolResult{}, ctx.Err()
+		default:
+		}
+
+		req := coapMessage{
+			Version: 1,
+			Type:    coapTypeCON,
+			Code:    coapCodePOST,
+			MsgID:   msgID,
+			Token:   token,
+			Path:    &quot;bci&quot;,
+			Payload: payload,
+		}
+		msgID++
+
+		out := make([]byte, 0, 4+len(token)+16+1+len(payload))
+		out = appendCoAP(out, req)
+
+		t0 := time.Now()
+		rawConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if err := writeFull(conn, out); err != nil {
+			return ProtocolResult{}, err
+		}
+
+		rawConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		n, err := conn.Read(buf)
+		if err != nil {
+			return ProtocolResult{}, err
+		}
+		resp, err := parseCoAP(buf[:n])
+		if err != nil {
+			return ProtocolResult{}, err
+		}
+		if resp.Version != 1 || resp.Type != coapTypeACK || resp.Code != coapCodeContent || resp.MsgID != req.MsgID || string(resp.Token) != string(req.Token) {
+			return ProtocolResult{}, fmt.Errorf(&quot;unexpected coap response&quot;)
+		}
+		if len(resp.Payload) != len(payload) {
+			return ProtocolResult{}, fmt.Errorf(&quot;coap echo length mismatch&quot;)
+		}
+		for j := range payload {
+			if resp.Payload[j] != payload[j] {
+				return ProtocolResult{}, fmt.Errorf(&quot;coap echo mismatch&quot;)
+			}
+		}
+
+		if i &gt;= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
+	}
+
+	if err := &lt;-serverErr; err != nil {
+		return ProtocolResult{}, err
+	}
+
+	peak := mem.Stop()
+	dur := time.Since(start)
+
+	wireBytes := clientStats.BytesWritten.Load() + serverStats.BytesWritten.Load()
+	payloadBytes := int64(cfg.Messages * cfg.PayloadSize * 2)
+
+	var freq [256]uint64
+	f1 := clientStats.SnapshotWrittenFreq()
+	f2 := serverStats.SnapshotWrittenFreq()
+	for i := 0; i &lt; 256; i++ {
+		freq[i] = f1[i] + f2[i]
+	}
+	bs := ComputeByteStats(freq)
+
+	avg := avgDuration(rtts)
+	p95 := percentileDuration(rtts, 0.95)
+
+	ws := summarizeWire(clientStats, serverStats)
+	durSec := dur.Seconds()
+	var payloadBps, wireBps float64
+	if durSec &gt; 0 {
+		payloadBps = float64(payloadBytes) / durSec
+		wireBps = float64(wireBytes) / durSec
+	}
+
+	return ProtocolResult{
+		Name:                          &quot;coap-udp&quot;,
+		Messages:                      cfg.Messages,
+		PayloadSize:                   cfg.PayloadSize,
+		PayloadBytesTotal:             payloadBytes,
+		WireBytesTotal:                wireBytes,
+		OverheadRatio:                 float64(wireBytes) / float64(payloadBytes),
+		AvgRTTMillis:                  float64(avg) / float64(time.Millisecond),
+		P95RTTMillis:                  float64(p95) / float64(time.Millisecond),
+		WireWriteCalls:                ws.writeCalls,
+		WireReadCalls:                 ws.readCalls,
+		WireWriteSizeBinsLog2:         ws.writeSizeBins,
+		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
+		WireActiveDurationMillis:      ws.activeDurationMillis,
+		WireEntropy:                   bs.Entropy,
+		WireASCIIRatio:                bs.ASCIIRatio,
+		PeakHeapAllocBytes:            peak.HeapAlloc,
+		PeakHeapInuseBytes:            peak.HeapInuse,
+		PeakSysBytes:                  peak.Sys,
+		PayloadThroughputBps:          payloadBps,
+		WireThroughputBps:             wireBps,
+		DurationMillis:                float64(dur) / float64(time.Millisecond),
+	}, nil
+}
+
+const (
+	coapTypeCON uint8 = 0
+	coapTypeACK uint8 = 2
+
+	coapCodePOST    uint8 = 0x02
+	coapCodeContent uint8 = 0x45 // 2.05 Content
+
+	coapOptUriPath uint16 = 11
+)
+
+type coapMessage struct {
+	Version uint8
+	Type    uint8
+	Code    uint8
+	MsgID   uint16
+	Token   []byte
+	Path    string
+	Payload []byte
+}
+
+func appendCoAP(dst []byte, m coapMessage) []byte {
+	tkl := len(m.Token)
+	if tkl &gt; 8 {
+		panic(&quot;coap token too long&quot;)
+	}
+	h0 := byte((m.Version&amp;0x3)&lt;&lt;6) | byte((m.Type&amp;0x3)&lt;&lt;4) | byte(tkl&amp;0xF)
+	dst = append(dst, h0, byte(m.Code), 0, 0)
+	binary.BigEndian.PutUint16(dst[len(dst)-2:], m.MsgID)
+	dst = append(dst, m.Token...)
+
+	// Options (Uri-Path).
+	optNum := uint16(0)
+	if strings.TrimSpace(m.Path) != &quot;&quot; {
+		for _, seg := range strings.Split(strings.Trim(m.Path, &quot;/&quot;), &quot;/&quot;) {
+			if seg == &quot;&quot; {
+				continue
+			}
+			dst = appendCoAPOption(dst, optNum, coapOptUriPath, []byte(seg))
+			optNum = coapOptUriPath
+		}
+	}
+
+	if len(m.Payload) &gt; 0 {
+		dst = append(dst, 0xFF)
+		dst = append(dst, m.Payload...)
+	}
+	return dst
+}
+
+func appendCoAPOption(dst []byte, prevOpt, opt uint16, val []byte) []byte {
+	delta := opt - prevOpt
+	dNib, dExt := encodeCoAPNibble(delta)
+	lNib, lExt := encodeCoAPNibble(uint16(len(val)))
+
+	dst = append(dst, byte((dNib&lt;&lt;4)|lNib))
+	dst = append(dst, dExt...)
+	dst = append(dst, lExt...)
+	dst = append(dst, val...)
+	return dst
+}
+
+func encodeCoAPNibble(n uint16) (byte, []byte) {
+	switch {
+	case n &lt;= 12:
+		return byte(n), nil
+	case n &lt;= 268:
+		return 13, []byte{byte(n - 13)}
+	default:
+		ext := make([]byte, 2)
+		binary.BigEndian.PutUint16(ext, n-269)
+		return 14, ext
+	}
+}
+
+func parseCoAP(b []byte) (coapMessage, error) {
+	var m coapMessage
+	if len(b) &lt; 4 {
+		return m, fmt.Errorf(&quot;coap: short&quot;)
+	}
+	v := (b[0] &gt;&gt; 6) &amp; 0x3
+	typ := (b[0] &gt;&gt; 4) &amp; 0x3
+	tkl := int(b[0] &amp; 0xF)
+	if tkl &gt; 8 {
+		return m, fmt.Errorf(&quot;coap: invalid tkl&quot;)
+	}
+	if len(b) &lt; 4+tkl {
+		return m, fmt.Errorf(&quot;coap: short token&quot;)
+	}
+	m.Version = v
+	m.Type = typ
+	m.Code = b[1]
+	m.MsgID = binary.BigEndian.Uint16(b[2:4])
+	m.Token = append([]byte(nil), b[4:4+tkl]...)
+
+	i := 4 + tkl
+	var (
+		optNum uint16
+		paths  []string
+	)
+	for i &lt; len(b) {
+		if b[i] == 0xFF {
+			i++
+			break
+		}
+		dNib := uint16(b[i] &gt;&gt; 4)
+		lNib := uint16(b[i] &amp; 0xF)
+		i++
+		if dNib == 15 || lNib == 15 {
+			return m, fmt.Errorf(&quot;coap: reserved nibble&quot;)
+		}
+		delta, di, err := decodeCoAPNibble(dNib, b, i)
+		if err != nil {
+			return m, err
+		}
+		i = di
+		l, li, err := decodeCoAPNibble(lNib, b, i)
+		if err != nil {
+			return m, err
+		}
+		i = li
+		optNum += uint16(delta)
+		if i+int(l) &gt; len(b) {
+			return m, fmt.Errorf(&quot;coap: option overflow&quot;)
+		}
+		val := b[i : i+int(l)]
+		i += int(l)
+		if optNum == coapOptUriPath {
+			paths = append(paths, string(val))
+		}
+	}
+
+	if len(paths) &gt; 0 {
+		m.Path = strings.Join(paths, &quot;/&quot;)
+	}
+	if i &lt;= len(b) {
+		m.Payload = append([]byte(nil), b[i:]...)
+	}
+	return m, nil
+}
+
+func decodeCoAPNibble(nib uint16, b []byte, i int) (uint16, int, error) {
+	switch nib {
+	case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12:
+		return nib, i, nil
+	case 13:
+		if i &gt;= len(b) {
+			return 0, i, fmt.Errorf(&quot;coap: short ext13&quot;)
+		}
+		return 13 + uint16(b[i]), i + 1, nil
+	case 14:
+		if i+1 &gt;= len(b) {
+			return 0, i, fmt.Errorf(&quot;coap: short ext14&quot;)
+		}
+		return 269 + binary.BigEndian.Uint16(b[i:i+2]), i + 2, nil
+	default:
+		return 0, i, fmt.Errorf(&quot;coap: invalid nibble&quot;)
+	}
+}
+</pre></details><details class="card"><summary><b>MQTT baseline (in-process broker, QoS0, TLS)</b> — <code>internal/bench/run_mqtt.go</code></summary><pre>package bench
+
+import (
+	&quot;bufio&quot;
+	&quot;context&quot;
+	&quot;crypto/tls&quot;
+	&quot;encoding/binary&quot;
+	&quot;fmt&quot;
+	&quot;io&quot;
+	&quot;net&quot;
+	&quot;runtime&quot;
+	&quot;sync&quot;
+	&quot;time&quot;
+)
+
+func RunMQTT(ctx context.Context, cfg RunConfig) (ProtocolResult, error) {
+	return RunMQTTOnTLS(ctx, cfg, &quot;127.0.0.1:0&quot;, nil)
+}
+
+func RunMQTTOnTCP(ctx context.Context, cfg RunConfig, listenAddr string, ready ReadyFunc) (ProtocolResult, error) {
+	if cfg.Messages &lt;= 0 {
+		cfg.Messages = 1000
+	}
+	if cfg.PayloadSize &lt;= 0 {
+		cfg.PayloadSize = 256
+	}
+
+	runtime.GC()
+	mem := StartMemSampler(5 * time.Millisecond)
+	start := time.Now()
+
+	deviceStats := &amp;WireStats{}
+	serverStats := &amp;WireStats{}
+	brokerStats := map[string]*WireStats{}
+	var brokerStatsMu sync.Mutex
+
+	ln, err := net.Listen(&quot;tcp&quot;, listenAddr)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer ln.Close()
+
+	brokerErr := make(chan error, 1)
+	go func() {
+		defer ln.Close()
+		&lt;-ctx.Done()
+	}()
+
+	broker := &amp;mqttBroker{
+		ln:   ln,
+		subs: map[string][]*mqttPeer{},
+		onConn: func(id string, stats *WireStats) {
+			brokerStatsMu.Lock()
+			defer brokerStatsMu.Unlock()
+			brokerStats[id] = stats
+		},
+	}
+	go func() { brokerErr &lt;- broker.serve(ctx) }()
+
+	if ready != nil {
+		port := ln.Addr().(*net.TCPAddr).Port
+		ready([]uint16{uint16(port)}, nil)
+	}
+
+	// &quot;BCI server&quot; client: subscribes req -&gt; publishes resp.
+	serverReady := make(chan struct{})
+	serverDone := make(chan error, 1)
+	go func() {
+		defer close(serverDone)
+		raw, err := net.DialTimeout(&quot;tcp&quot;, ln.Addr().String(), 2*time.Second)
+		if err != nil {
+			serverDone &lt;- err
+			return
+		}
+		defer raw.Close()
+
+		c := WrapConn(raw, serverStats)
+		r := bufio.NewReader(c)
+		if err := mqttConnect(c, r, &quot;server&quot;); err != nil {
+			serverDone &lt;- err
+			return
+		}
+		if err := mqttSubscribe(c, r, 1, &quot;bci/req&quot;); err != nil {
+			serverDone &lt;- err
+			return
+		}
+		close(serverReady)
+
+		for i := 0; i &lt; cfg.Messages; i++ {
+			topic, payload, err := mqttReadPublish(r)
+			if err != nil {
+				serverDone &lt;- err
+				return
+			}
+			if topic != &quot;bci/req&quot; {
+				serverDone &lt;- fmt.Errorf(&quot;mqtt server: unexpected topic: %q&quot;, topic)
+				return
+			}
+			if err := mqttPublish(c, &quot;bci/resp&quot;, payload); err != nil {
+				serverDone &lt;- err
+				return
+			}
+		}
+		serverDone &lt;- nil
+	}()
+
+	// Device client: publishes req -&gt; waits resp.
+	raw, err := net.DialTimeout(&quot;tcp&quot;, ln.Addr().String(), 2*time.Second)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer raw.Close()
+
+	c := WrapConn(raw, deviceStats)
+	r := bufio.NewReader(c)
+	if err := mqttConnect(c, r, &quot;device&quot;); err != nil {
+		return ProtocolResult{}, err
+	}
+	if err := mqttSubscribe(c, r, 1, &quot;bci/resp&quot;); err != nil {
+		return ProtocolResult{}, err
+	}
+
+	select {
+	case &lt;-serverReady:
+	case &lt;-ctx.Done():
+		return ProtocolResult{}, ctx.Err()
+	}
+
+	payload := make([]byte, cfg.PayloadSize)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+
+	rtts := make([]time.Duration, 0, cfg.Messages)
+	warmup := rttWarmupCount(cfg.Messages)
+	for i := 0; i &lt; cfg.Messages; i++ {
+		select {
+		case &lt;-ctx.Done():
+			return ProtocolResult{}, ctx.Err()
+		default:
+		}
+		t0 := time.Now()
+		if err := mqttPublish(c, &quot;bci/req&quot;, payload); err != nil {
+			return ProtocolResult{}, err
+		}
+		topic, resp, err := mqttReadPublish(r)
+		if err != nil {
+			return ProtocolResult{}, err
+		}
+		if topic != &quot;bci/resp&quot; {
+			return ProtocolResult{}, fmt.Errorf(&quot;mqtt device: unexpected topic: %q&quot;, topic)
+		}
+		if len(resp) != len(payload) {
+			return ProtocolResult{}, fmt.Errorf(&quot;mqtt echo length mismatch&quot;)
+		}
+		for j := range payload {
+			if resp[j] != payload[j] {
+				return ProtocolResult{}, fmt.Errorf(&quot;mqtt echo mismatch&quot;)
+			}
+		}
+		if i &gt;= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
+	}
+
+	if err := &lt;-serverDone; err != nil {
+		return ProtocolResult{}, err
+	}
+	_ = ln.Close()
+	_ = raw.Close()
+
+	select {
+	case err := &lt;-brokerErr:
+		if err != nil &amp;&amp; ctx.Err() == nil {
+			// Ignore accept loop errors during shutdown.
+		}
+	default:
+	}
+
+	peak := mem.Stop()
+	dur := time.Since(start)
+
+	brokerStatsMu.Lock()
+	bsDevice := brokerStats[&quot;device&quot;]
+	bsServer := brokerStats[&quot;server&quot;]
+	brokerStatsMu.Unlock()
+	if bsDevice == nil || bsServer == nil {
+		return ProtocolResult{}, fmt.Errorf(&quot;mqtt broker stats missing (got device=%v server=%v)&quot;, bsDevice != nil, bsServer != nil)
+	}
+
+	wireBytes := deviceStats.BytesWritten.Load() + serverStats.BytesWritten.Load() + bsDevice.BytesWritten.Load() + bsServer.BytesWritten.Load()
+	payloadBytes := int64(cfg.Messages * cfg.PayloadSize * 2)
+
+	var freq [256]uint64
+	acc := func(s *WireStats) {
+		f := s.SnapshotWrittenFreq()
+		for i := 0; i &lt; 256; i++ {
+			freq[i] += f[i]
+		}
+	}
+	acc(deviceStats)
+	acc(serverStats)
+	acc(bsDevice)
+	acc(bsServer)
+	stats := ComputeByteStats(freq)
+
+	avg := avgDuration(rtts)
+	p95 := percentileDuration(rtts, 0.95)
+
+	ws := summarizeWireMany(deviceStats, serverStats, bsDevice, bsServer)
+	durSec := dur.Seconds()
+	var payloadBps, wireBps float64
+	if durSec &gt; 0 {
+		payloadBps = float64(payloadBytes) / durSec
+		wireBps = float64(wireBytes) / durSec
+	}
+
+	return ProtocolResult{
+		Name:                          &quot;mqtt-3.1.1-qos0&quot;,
+		Messages:                      cfg.Messages,
+		PayloadSize:                   cfg.PayloadSize,
+		PayloadBytesTotal:             payloadBytes,
+		WireBytesTotal:                wireBytes,
+		OverheadRatio:                 float64(wireBytes) / float64(payloadBytes),
+		AvgRTTMillis:                  float64(avg) / float64(time.Millisecond),
+		P95RTTMillis:                  float64(p95) / float64(time.Millisecond),
+		WireWriteCalls:                ws.writeCalls,
+		WireReadCalls:                 ws.readCalls,
+		WireWriteSizeBinsLog2:         ws.writeSizeBins,
+		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
+		WireActiveDurationMillis:      ws.activeDurationMillis,
+		WireEntropy:                   stats.Entropy,
+		WireASCIIRatio:                stats.ASCIIRatio,
+		PeakHeapAllocBytes:            peak.HeapAlloc,
+		PeakHeapInuseBytes:            peak.HeapInuse,
+		PeakSysBytes:                  peak.Sys,
+		PayloadThroughputBps:          payloadBps,
+		WireThroughputBps:             wireBps,
+		DurationMillis:                float64(dur) / float64(time.Millisecond),
+	}, nil
+}
+
+func RunMQTTOnTLS(ctx context.Context, cfg RunConfig, listenAddr string, ready ReadyFunc) (ProtocolResult, error) {
+	if cfg.Messages &lt;= 0 {
+		cfg.Messages = 1000
+	}
+	if cfg.PayloadSize &lt;= 0 {
+		cfg.PayloadSize = 256
+	}
+
+	certs, err := newLocalCertBundle()
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	serverTLS := &amp;tls.Config{
+		MinVersion:   tls.VersionTLS13,
+		MaxVersion:   tls.VersionTLS13,
+		Certificates: []tls.Certificate{certs.ServerCert},
+	}
+	clientTLS := &amp;tls.Config{
+		MinVersion: tls.VersionTLS13,
+		MaxVersion: tls.VersionTLS13,
+		RootCAs:    certs.CAPool,
+		// When using tls.Client (not tls.Dial), ServerName must be set.
+		// Go treats IP strings specially and will verify against IP SANs.
+		ServerName: &quot;127.0.0.1&quot;,
+	}
+
+	runtime.GC()
+	mem := StartMemSampler(5 * time.Millisecond)
+	start := time.Now()
+
+	deviceStats := &amp;WireStats{}
+	serverStats := &amp;WireStats{}
+	brokerStats := map[string]*WireStats{}
+	var brokerStatsMu sync.Mutex
+
+	ln, err := net.Listen(&quot;tcp&quot;, listenAddr)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer ln.Close()
+
+	brokerErr := make(chan error, 1)
+	go func() {
+		defer ln.Close()
+		&lt;-ctx.Done()
+	}()
+
+	broker := &amp;mqttBroker{
+		ln:        ln,
+		subs:      map[string][]*mqttPeer{},
+		tlsConfig: serverTLS,
+		onConn: func(id string, stats *WireStats) {
+			brokerStatsMu.Lock()
+			defer brokerStatsMu.Unlock()
+			brokerStats[id] = stats
+		},
+	}
+	go func() { brokerErr &lt;- broker.serve(ctx) }()
+
+	if ready != nil {
+		port := ln.Addr().(*net.TCPAddr).Port
+		ready([]uint16{uint16(port)}, nil)
+	}
+
+	// &quot;BCI server&quot; client: subscribes req -&gt; publishes resp.
+	serverReady := make(chan struct{})
+	serverDone := make(chan error, 1)
+	go func() {
+		defer close(serverDone)
+		raw, err := net.DialTimeout(&quot;tcp&quot;, ln.Addr().String(), 2*time.Second)
+		if err != nil {
+			serverDone &lt;- err
+			return
+		}
+		defer raw.Close()
+
+		counted := WrapConn(raw, serverStats)
+		tc := tls.Client(counted, clientTLS)
+		_ = tc.SetDeadline(time.Now().Add(5 * time.Second))
+		if err := tc.HandshakeContext(ctx); err != nil {
+			serverDone &lt;- err
+			return
+		}
+		_ = tc.SetDeadline(time.Time{})
+
+		r := bufio.NewReader(tc)
+		if err := mqttConnect(tc, r, &quot;server&quot;); err != nil {
+			serverDone &lt;- err
+			return
+		}
+		if err := mqttSubscribe(tc, r, 1, &quot;bci/req&quot;); err != nil {
+			serverDone &lt;- err
+			return
+		}
+		close(serverReady)
+
+		for i := 0; i &lt; cfg.Messages; i++ {
+			topic, payload, err := mqttReadPublish(r)
+			if err != nil {
+				serverDone &lt;- err
+				return
+			}
+			if topic != &quot;bci/req&quot; {
+				serverDone &lt;- fmt.Errorf(&quot;mqtt server: unexpected topic: %q&quot;, topic)
+				return
+			}
+			if err := mqttPublish(tc, &quot;bci/resp&quot;, payload); err != nil {
+				serverDone &lt;- err
+				return
+			}
+		}
+		serverDone &lt;- nil
+	}()
+
+	// Device client: publishes req -&gt; waits resp.
+	raw, err := net.DialTimeout(&quot;tcp&quot;, ln.Addr().String(), 2*time.Second)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer raw.Close()
+
+	counted := WrapConn(raw, deviceStats)
+	tc := tls.Client(counted, clientTLS)
+	_ = tc.SetDeadline(time.Now().Add(5 * time.Second))
+	if err := tc.HandshakeContext(ctx); err != nil {
+		return ProtocolResult{}, err
+	}
+	_ = tc.SetDeadline(time.Time{})
+
+	r := bufio.NewReader(tc)
+	if err := mqttConnect(tc, r, &quot;device&quot;); err != nil {
+		return ProtocolResult{}, err
+	}
+	if err := mqttSubscribe(tc, r, 1, &quot;bci/resp&quot;); err != nil {
+		return ProtocolResult{}, err
+	}
+
+	select {
+	case &lt;-serverReady:
+	case &lt;-ctx.Done():
+		return ProtocolResult{}, ctx.Err()
+	}
+
+	payload := make([]byte, cfg.PayloadSize)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+
+	rtts := make([]time.Duration, 0, cfg.Messages)
+	warmup := rttWarmupCount(cfg.Messages)
+	for i := 0; i &lt; cfg.Messages; i++ {
+		select {
+		case &lt;-ctx.Done():
+			return ProtocolResult{}, ctx.Err()
+		default:
+		}
+		t0 := time.Now()
+		if err := mqttPublish(tc, &quot;bci/req&quot;, payload); err != nil {
+			return ProtocolResult{}, err
+		}
+		topic, resp, err := mqttReadPublish(r)
+		if err != nil {
+			return ProtocolResult{}, err
+		}
+		if topic != &quot;bci/resp&quot; {
+			return ProtocolResult{}, fmt.Errorf(&quot;mqtt device: unexpected topic: %q&quot;, topic)
+		}
+		if len(resp) != len(payload) {
+			return ProtocolResult{}, fmt.Errorf(&quot;mqtt echo length mismatch&quot;)
+		}
+		for j := range payload {
+			if resp[j] != payload[j] {
+				return ProtocolResult{}, fmt.Errorf(&quot;mqtt echo mismatch&quot;)
+			}
+		}
+		if i &gt;= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
+	}
+
+	if err := &lt;-serverDone; err != nil {
+		return ProtocolResult{}, err
+	}
+	_ = ln.Close()
+	_ = raw.Close()
+
+	select {
+	case err := &lt;-brokerErr:
+		if err != nil &amp;&amp; ctx.Err() == nil {
+			// Ignore accept loop errors during shutdown.
+		}
+	default:
+	}
+
+	peak := mem.Stop()
+	dur := time.Since(start)
+
+	brokerStatsMu.Lock()
+	bsDevice := brokerStats[&quot;device&quot;]
+	bsServer := brokerStats[&quot;server&quot;]
+	brokerStatsMu.Unlock()
+	if bsDevice == nil || bsServer == nil {
+		return ProtocolResult{}, fmt.Errorf(&quot;mqtt broker stats missing (got device=%v server=%v)&quot;, bsDevice != nil, bsServer != nil)
+	}
+
+	wireBytes := deviceStats.BytesWritten.Load() + serverStats.BytesWritten.Load() + bsDevice.BytesWritten.Load() + bsServer.BytesWritten.Load()
+	payloadBytes := int64(cfg.Messages * cfg.PayloadSize * 2)
+
+	var freq [256]uint64
+	acc := func(s *WireStats) {
+		f := s.SnapshotWrittenFreq()
+		for i := 0; i &lt; 256; i++ {
+			freq[i] += f[i]
+		}
+	}
+	acc(deviceStats)
+	acc(serverStats)
+	acc(bsDevice)
+	acc(bsServer)
+	stats := ComputeByteStats(freq)
+
+	avg := avgDuration(rtts)
+	p95 := percentileDuration(rtts, 0.95)
+
+	ws := summarizeWireMany(deviceStats, serverStats, bsDevice, bsServer)
+	durSec := dur.Seconds()
+	var payloadBps, wireBps float64
+	if durSec &gt; 0 {
+		payloadBps = float64(payloadBytes) / durSec
+		wireBps = float64(wireBytes) / durSec
+	}
+
+	return ProtocolResult{
+		Name:                          &quot;mqtt-3.1.1-qos0-tls&quot;,
+		Messages:                      cfg.Messages,
+		PayloadSize:                   cfg.PayloadSize,
+		PayloadBytesTotal:             payloadBytes,
+		WireBytesTotal:                wireBytes,
+		OverheadRatio:                 float64(wireBytes) / float64(payloadBytes),
+		AvgRTTMillis:                  float64(avg) / float64(time.Millisecond),
+		P95RTTMillis:                  float64(p95) / float64(time.Millisecond),
+		WireWriteCalls:                ws.writeCalls,
+		WireReadCalls:                 ws.readCalls,
+		WireWriteSizeBinsLog2:         ws.writeSizeBins,
+		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
+		WireActiveDurationMillis:      ws.activeDurationMillis,
+		WireEntropy:                   stats.Entropy,
+		WireASCIIRatio:                stats.ASCIIRatio,
+		PeakHeapAllocBytes:            peak.HeapAlloc,
+		PeakHeapInuseBytes:            peak.HeapInuse,
+		PeakSysBytes:                  peak.Sys,
+		PayloadThroughputBps:          payloadBps,
+		WireThroughputBps:             wireBps,
+		DurationMillis:                float64(dur) / float64(time.Millisecond),
+	}, nil
+}
+
+type mqttBroker struct {
+	ln net.Listener
+
+	mu   sync.Mutex
+	subs map[string][]*mqttPeer
+
+	onConn func(clientID string, stats *WireStats)
+
+	tlsConfig *tls.Config
+}
+
+type mqttPeer struct {
+	id    string
+	conn  net.Conn
+	br    *bufio.Reader
+	stats *WireStats
+
+	wmu sync.Mutex
+}
+
+func (b *mqttBroker) serve(ctx context.Context) error {
+	if b.ln == nil {
+		return fmt.Errorf(&quot;mqtt broker: nil listener&quot;)
+	}
+	for {
+		raw, err := b.ln.Accept()
+		if err != nil {
+			select {
+			case &lt;-ctx.Done():
+				return nil
+			default:
+				return err
+			}
+		}
+		go b.handleConn(ctx, raw)
+	}
+}
+
+func (b *mqttBroker) handleConn(ctx context.Context, raw net.Conn) {
+	defer raw.Close()
+
+	stats := &amp;WireStats{}
+	counted := WrapConn(raw, stats)
+	conn := counted
+	if b.tlsConfig != nil {
+		tlsConn := tls.Server(counted, b.tlsConfig)
+		_ = tlsConn.SetDeadline(time.Now().Add(5 * time.Second))
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			return
+		}
+		_ = tlsConn.SetDeadline(time.Time{})
+		conn = tlsConn
+	}
+	r := bufio.NewReader(conn)
+
+	pt, _, body, err := mqttReadPacket(r)
+	if err != nil {
+		return
+	}
+	if pt != mqttTypeCONNECT {
+		return
+	}
+	id, err := mqttParseConnect(body)
+	if err != nil {
+		return
+	}
+	p := &amp;mqttPeer{id: id, conn: conn, br: r, stats: stats}
+	if b.onConn != nil {
+		b.onConn(id, stats)
+	}
+	_ = mqttWriteConnAck(p.conn)
+
+	for {
+		select {
+		case &lt;-ctx.Done():
+			return
+		default:
+		}
+		pt, _, body, err := mqttReadPacket(p.br)
+		if err != nil {
+			return
+		}
+		switch pt {
+		case mqttTypeSUBSCRIBE:
+			pid, topic, err := mqttParseSubscribe(body)
+			if err != nil {
+				return
+			}
+			b.mu.Lock()
+			b.subs[topic] = append(b.subs[topic], p)
+			b.mu.Unlock()
+			_ = mqttWriteSubAck(p.conn, pid)
+		case mqttTypePUBLISH:
+			topic, payload, err := mqttParsePublish(body)
+			if err != nil {
+				return
+			}
+			b.mu.Lock()
+			subs := append([]*mqttPeer(nil), b.subs[topic]...)
+			b.mu.Unlock()
+			for _, s := range subs {
+				s.wmu.Lock()
+				_ = mqttPublish(s.conn, topic, payload)
+				s.wmu.Unlock()
+			}
+		case mqttTypePINGREQ:
+			p.wmu.Lock()
+			_ = mqttWritePingResp(p.conn)
+			p.wmu.Unlock()
+		case mqttTypeDISCONNECT:
+			return
+		default:
+			// ignore
+		}
+	}
+}
+
+const (
+	mqttTypeCONNECT    byte = 1
+	mqttTypeCONNACK    byte = 2
+	mqttTypePUBLISH    byte = 3
+	mqttTypeSUBSCRIBE  byte = 8
+	mqttTypeSUBACK     byte = 9
+	mqttTypePINGREQ    byte = 12
+	mqttTypePINGRESP   byte = 13
+	mqttTypeDISCONNECT byte = 14
+)
+
+func mqttConnect(w io.Writer, r *bufio.Reader, clientID string) error {
+	body := make([]byte, 0, 64)
+	body = appendString(body, &quot;MQTT&quot;)
+	body = append(body, 4)    // protocol level 4 (3.1.1)
+	body = append(body, 0x02) // clean session
+	body = append(body, 0, 30)
+	body = appendString(body, clientID)
+	if err := mqttWritePacket(w, 0x10, body); err != nil {
+		return err
+	}
+	pt, _, resp, err := mqttReadPacket(r)
+	if err != nil {
+		return err
+	}
+	if pt != mqttTypeCONNACK || len(resp) &lt; 2 || resp[1] != 0 {
+		return fmt.Errorf(&quot;mqtt: connack failed&quot;)
+	}
+	return nil
+}
+
+func mqttSubscribe(w io.Writer, r *bufio.Reader, packetID uint16, topic string) error {
+	body := make([]byte, 0, 64)
+	body = binary.BigEndian.AppendUint16(body, packetID)
+	body = appendString(body, topic)
+	body = append(body, 0x00) // QoS 0
+	if err := mqttWritePacket(w, 0x82, body); err != nil {
+		return err
+	}
+	pt, _, resp, err := mqttReadPacket(r)
+	if err != nil {
+		return err
+	}
+	if pt != mqttTypeSUBACK || len(resp) &lt; 3 || binary.BigEndian.Uint16(resp[:2]) != packetID {
+		return fmt.Errorf(&quot;mqtt: suback failed&quot;)
+	}
+	return nil
+}
+
+func mqttPublish(w io.Writer, topic string, payload []byte) error {
+	body := make([]byte, 0, 2+len(topic)+len(payload))
+	body = appendString(body, topic)
+	body = append(body, payload...)
+	return mqttWritePacket(w, 0x30, body)
+}
+
+func mqttReadPublish(r *bufio.Reader) (topic string, payload []byte, err error) {
+	for {
+		pt, _, body, err := mqttReadPacket(r)
+		if err != nil {
+			return &quot;&quot;, nil, err
+		}
+		if pt != mqttTypePUBLISH {
+			continue
+		}
+		topic, payload, err := mqttParsePublish(body)
+		return topic, payload, err
+	}
+}
+
+func mqttWriteConnAck(w io.Writer) error {
+	return mqttWritePacket(w, 0x20, []byte{0x00, 0x00})
+}
+
+func mqttWriteSubAck(w io.Writer, packetID uint16) error {
+	body := make([]byte, 0, 4)
+	body = binary.BigEndian.AppendUint16(body, packetID)
+	body = append(body, 0x00)
+	return mqttWritePacket(w, 0x90, body)
+}
+
+func mqttWritePingResp(w io.Writer) error {
+	return mqttWritePacket(w, 0xD0, nil)
+}
+
+func mqttReadPacket(r *bufio.Reader) (pt byte, flags byte, body []byte, err error) {
+	h, err := r.ReadByte()
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	pt = h &gt;&gt; 4
+	flags = h &amp; 0x0F
+
+	rl, err := mqttReadRemainingLength(r)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	if rl &lt; 0 || rl &gt; 16*1024*1024 {
+		return 0, 0, nil, fmt.Errorf(&quot;mqtt: invalid remaining length %d&quot;, rl)
+	}
+	body = make([]byte, rl)
+	if _, err := io.ReadFull(r, body); err != nil {
+		return 0, 0, nil, err
+	}
+	return pt, flags, body, nil
+}
+
+func mqttWritePacket(w io.Writer, fixedHeader byte, body []byte) error {
+	if _, err := w.Write([]byte{fixedHeader}); err != nil {
+		return err
+	}
+	if err := mqttWriteRemainingLength(w, len(body)); err != nil {
+		return err
+	}
+	return writeFull(w, body)
+}
+
+func mqttReadRemainingLength(r *bufio.Reader) (int, error) {
+	mult := 1
+	val := 0
+	for i := 0; i &lt; 4; i++ {
+		b, err := r.ReadByte()
+		if err != nil {
+			return 0, err
+		}
+		val += int(b&amp;127) * mult
+		if (b &amp; 128) == 0 {
+			return val, nil
+		}
+		mult *= 128
+	}
+	return 0, fmt.Errorf(&quot;mqtt: remaining length overflow&quot;)
+}
+
+func mqttWriteRemainingLength(w io.Writer, n int) error {
+	for {
+		d := byte(n % 128)
+		n /= 128
+		if n &gt; 0 {
+			d |= 0x80
+		}
+		if _, err := w.Write([]byte{d}); err != nil {
+			return err
+		}
+		if n &lt;= 0 {
+			return nil
+		}
+	}
+}
+
+func mqttParseConnect(body []byte) (string, error) {
+	// protocol name
+	_, rest, err := readString(body)
+	if err != nil {
+		return &quot;&quot;, err
+	}
+	if len(rest) &lt; 4 {
+		return &quot;&quot;, fmt.Errorf(&quot;mqtt: connect short&quot;)
+	}
+	// level := rest[0]
+	// flags := rest[1]
+	// keepalive := binary.BigEndian.Uint16(rest[2:4])
+	rest = rest[4:]
+	id, _, err := readString(rest)
+	return id, err
+}
+
+func mqttParseSubscribe(body []byte) (packetID uint16, topic string, err error) {
+	if len(body) &lt; 2 {
+		return 0, &quot;&quot;, fmt.Errorf(&quot;mqtt: subscribe short&quot;)
+	}
+	packetID = binary.BigEndian.Uint16(body[:2])
+	topic, rest, err := readString(body[2:])
+	if err != nil {
+		return 0, &quot;&quot;, err
+	}
+	if len(rest) &lt; 1 {
+		return 0, &quot;&quot;, fmt.Errorf(&quot;mqtt: subscribe missing qos&quot;)
+	}
+	return packetID, topic, nil
+}
+
+func mqttParsePublish(body []byte) (topic string, payload []byte, err error) {
+	topic, rest, err := readString(body)
+	if err != nil {
+		return &quot;&quot;, nil, err
+	}
+	return topic, rest, nil
+}
+
+func appendString(dst []byte, s string) []byte {
+	dst = binary.BigEndian.AppendUint16(dst, uint16(len(s)))
+	dst = append(dst, s...)
+	return dst
+}
+
+func readString(b []byte) (s string, rest []byte, err error) {
+	if len(b) &lt; 2 {
+		return &quot;&quot;, nil, fmt.Errorf(&quot;mqtt: short string&quot;)
+	}
+	n := int(binary.BigEndian.Uint16(b[:2]))
+	b = b[2:]
+	if n &lt; 0 || n &gt; len(b) {
+		return &quot;&quot;, nil, fmt.Errorf(&quot;mqtt: string length overflow&quot;)
+	}
+	return string(b[:n]), b[n:], nil
+}
+</pre></details><details class="card"><summary><b>TLS/DTLS local cert helper</b> — <code>internal/bench/tlsutil.go</code></summary><pre>package bench
+
+import (
+	&quot;crypto/ecdsa&quot;
+	&quot;crypto/elliptic&quot;
+	&quot;crypto/rand&quot;
+	&quot;crypto/tls&quot;
+	&quot;crypto/x509&quot;
+	&quot;crypto/x509/pkix&quot;
+	&quot;math/big&quot;
+	&quot;net&quot;
+	&quot;time&quot;
+)
+
+type localCertBundle struct {
+	CAPool     *x509.CertPool
+	ServerCert tls.Certificate
+	ClientCert tls.Certificate
+}
+
+func newLocalCertBundle() (*localCertBundle, error) {
+	now := time.Now()
+
+	// CA
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	caTmpl := &amp;x509.Certificate{
+		SerialNumber: randomSerial(),
+		Subject: pkix.Name{
+			CommonName:   &quot;iotbci-bench-ca&quot;,
+			Organization: []string{&quot;iotbci-bench&quot;},
+		},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &amp;caKey.PublicKey, caKey)
+	if err != nil {
+		return nil, err
+	}
+	caCert, err := x509.ParseCertificate(caDER)
+	if err != nil {
+		return nil, err
+	}
+	caPool := x509.NewCertPool()
+	caPool.AddCert(caCert)
+
+	// Server
+	serverKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	serverTmpl := &amp;x509.Certificate{
+		SerialNumber: randomSerial(),
+		Subject: pkix.Name{
+			CommonName: &quot;iotbci-bench-server&quot;,
+		},
+		NotBefore: now.Add(-time.Hour),
+		NotAfter:  now.Add(24 * time.Hour),
+		KeyUsage:  x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageServerAuth,
+		},
+		BasicConstraintsValid: true,
+		IPAddresses: []net.IP{
+			net.ParseIP(&quot;127.0.0.1&quot;),
+		},
+		DNSNames: []string{&quot;localhost&quot;},
+	}
+	serverDER, err := x509.CreateCertificate(rand.Reader, serverTmpl, caCert, &amp;serverKey.PublicKey, caKey)
+	if err != nil {
+		return nil, err
+	}
+	serverCert := tls.Certificate{
+		Certificate: [][]byte{serverDER, caDER},
+		PrivateKey:  serverKey,
+	}
+
+	// Client
+	clientKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	clientTmpl := &amp;x509.Certificate{
+		SerialNumber: randomSerial(),
+		Subject: pkix.Name{
+			CommonName: &quot;iotbci-bench-client&quot;,
+		},
+		NotBefore: now.Add(-time.Hour),
+		NotAfter:  now.Add(24 * time.Hour),
+		KeyUsage:  x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageClientAuth,
+		},
+		BasicConstraintsValid: true,
+	}
+	clientDER, err := x509.CreateCertificate(rand.Reader, clientTmpl, caCert, &amp;clientKey.PublicKey, caKey)
+	if err != nil {
+		return nil, err
+	}
+	clientCert := tls.Certificate{
+		Certificate: [][]byte{clientDER, caDER},
+		PrivateKey:  clientKey,
+	}
+
+	return &amp;localCertBundle{
+		CAPool:     caPool,
+		ServerCert: serverCert,
+		ClientCert: clientCert,
+	}, nil
+}
+
+func randomSerial() *big.Int {
+	// Best-effort 128-bit serial.
+	limit := new(big.Int).Lsh(big.NewInt(1), 128)
+	n, err := rand.Int(rand.Reader, limit)
+	if err != nil {
+		// Fallback to time-based serial if rand fails.
+		return big.NewInt(time.Now().UnixNano())
+	}
+	return n
+}
+
+</pre></details><details class="card"><summary><b>Pure AEAD baseline (RecordConn)</b> — <code>internal/bench/run_pure_aead.go</code></summary><pre>package bench
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;fmt&quot;
+	&quot;runtime&quot;
+	&quot;time&quot;
+
+	&quot;github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci&quot;
+)
+
+func RunPureAEAD(ctx context.Context, cfg RunConfig, method iotbci.AEADMethod, psk string) (ProtocolResult, error) {
+	if cfg.Messages &lt;= 0 {
+		cfg.Messages = 1000
+	}
+	if cfg.PayloadSize &lt;= 0 {
+		cfg.PayloadSize = 256
+	}
+
+	runtime.GC()
+	mem := StartMemSampler(5 * time.Millisecond)
+	start := time.Now()
+
+	clientStats := &amp;WireStats{}
+	serverStats := &amp;WireStats{}
+
+	sRaw, cRaw := netPipe()
+	defer sRaw.Close()
+	defer cRaw.Close()
+
+	sCount := WrapConn(sRaw, serverStats)
+	cCount := WrapConn(cRaw, clientStats)
+
+	c2sKey, s2cKey, c2sSalt, s2cSalt := iotbci.DerivePSKHandshakeKeys(psk)
+	sConn, err := iotbci.NewRecordConn(sCount, method, s2cKey[:], c2sKey[:], s2cSalt, c2sSalt)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	cConn, err := iotbci.NewRecordConn(cCount, method, c2sKey[:], s2cKey[:], c2sSalt, s2cSalt)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+
+	payload := make([]byte, cfg.PayloadSize)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+
+	// Echo server.
+	serverErr := make(chan error, 1)
+	go func() {
+		buf := make([]byte, len(payload))
+		for i := 0; i &lt; cfg.Messages; i++ {
+			if err := readFull(sConn, buf); err != nil {
+				serverErr &lt;- err
+				return
+			}
+			if err := writeFull(sConn, buf); err != nil {
+				serverErr &lt;- err
+				return
+			}
+		}
+		serverErr &lt;- nil
+	}()
+
+	resp := make([]byte, len(payload))
+	rtts := make([]time.Duration, 0, cfg.Messages)
+	warmup := rttWarmupCount(cfg.Messages)
+	for i := 0; i &lt; cfg.Messages; i++ {
+		select {
+		case &lt;-ctx.Done():
+			return ProtocolResult{}, ctx.Err()
+		default:
+		}
+		t0 := time.Now()
+		if err := writeFull(cConn, payload); err != nil {
+			return ProtocolResult{}, err
+		}
+		if err := readFull(cConn, resp); err != nil {
+			return ProtocolResult{}, err
+		}
+		if !bytes.Equal(resp, payload) {
+			return ProtocolResult{}, fmt.Errorf(&quot;pure-aead echo mismatch&quot;)
+		}
+		if i &gt;= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
+	}
+	if err := &lt;-serverErr; err != nil {
+		return ProtocolResult{}, err
+	}
+
+	peak := mem.Stop()
+	dur := time.Since(start)
+
+	wireBytes := clientStats.BytesWritten.Load() + serverStats.BytesWritten.Load()
+	payloadBytes := int64(cfg.Messages * cfg.PayloadSize * 2)
+
+	var freq [256]uint64
+	f1 := clientStats.SnapshotWrittenFreq()
+	f2 := serverStats.SnapshotWrittenFreq()
+	for i := 0; i &lt; 256; i++ {
+		freq[i] = f1[i] + f2[i]
+	}
+	bs := ComputeByteStats(freq)
+
+	avg := avgDuration(rtts)
+	p95 := percentileDuration(rtts, 0.95)
+
+	ws := summarizeWire(clientStats, serverStats)
+	durSec := dur.Seconds()
+	var payloadBps, wireBps float64
+	if durSec &gt; 0 {
+		payloadBps = float64(payloadBytes) / durSec
+		wireBps = float64(wireBytes) / durSec
+	}
+
+	return ProtocolResult{
+		Name:                          &quot;pure-aead&quot;,
+		Messages:                      cfg.Messages,
+		PayloadSize:                   cfg.PayloadSize,
+		PayloadBytesTotal:             payloadBytes,
+		WireBytesTotal:                wireBytes,
+		OverheadRatio:                 float64(wireBytes) / float64(payloadBytes),
+		AvgRTTMillis:                  float64(avg) / float64(time.Millisecond),
+		P95RTTMillis:                  float64(p95) / float64(time.Millisecond),
+		WireWriteCalls:                ws.writeCalls,
+		WireReadCalls:                 ws.readCalls,
+		WireWriteSizeBinsLog2:         ws.writeSizeBins,
+		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
+		WireActiveDurationMillis:      ws.activeDurationMillis,
+		WireEntropy:                   bs.Entropy,
+		WireASCIIRatio:                bs.ASCIIRatio,
+		PeakHeapAllocBytes:            peak.HeapAlloc,
+		PeakHeapInuseBytes:            peak.HeapInuse,
+		PeakSysBytes:                  peak.Sys,
+		PayloadThroughputBps:          payloadBps,
+		WireThroughputBps:             wireBps,
+		DurationMillis:                float64(dur) / float64(time.Millisecond),
+	}, nil
+}
+</pre></details><details class="card"><summary><b>IoTBCI-Sudoku (micro)</b> — <code>internal/bench/run_iotbci_sudoku.go</code></summary><pre>package bench
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;crypto/ed25519&quot;
+	&quot;crypto/rand&quot;
+	&quot;crypto/sha256&quot;
+	&quot;fmt&quot;
+	&quot;runtime&quot;
+	&quot;time&quot;
+
+	&quot;github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci&quot;
+	&quot;github.com/BlingCc233/IoT_BCI-sudoku/pkg/obfs/sudoku&quot;
+)
+
+func RunIoTBCISudoku(ctx context.Context, cfg RunConfig, enablePureDownlink bool, paddingMin, paddingMax int) (ProtocolResult, error) {
+	if cfg.Messages &lt;= 0 {
+		cfg.Messages = 1000
+	}
+	if cfg.PayloadSize &lt;= 0 {
+		cfg.PayloadSize = 256
+	}
+
+	// Identity &amp; certs (master-signed).
+	masterPub, masterPriv, _ := ed25519.GenerateKey(rand.Reader)
+	serverPub, serverPriv, _ := ed25519.GenerateKey(rand.Reader)
+	clientPub, clientPriv, _ := ed25519.GenerateKey(rand.Reader)
+
+	now := time.Now()
+	serverCert, err := iotbci.IssueCert(masterPriv, &quot;server-1&quot;, serverPub, now.Add(-time.Hour), now.Add(24*time.Hour), 1)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	clientCert, err := iotbci.IssueCert(masterPriv, &quot;device-1&quot;, clientPub, now.Add(-time.Hour), now.Add(24*time.Hour), 2)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+
+	// Shared PSK for handshake protection + obfs seed.
+	sum := sha256.Sum256([]byte(now.String()))
+	psk := &quot;bench-psk:&quot; + hex8(sum[:])
+
+	asciiMode := &quot;prefer_entropy&quot;
+	customTables := []string{&quot;xppppxvv&quot;}
+	if enablePureDownlink {
+		asciiMode = &quot;prefer_ascii&quot;
+		customTables = nil
+	}
+
+	// Prefer AES-GCM on platforms with hardware support; aligns with DTLS baseline cipher-suite.
+	hsAEAD := iotbci.AEADAES128GCM
+	sessAEAD := iotbci.AEADAES128GCM
+
+	serverOpts := &amp;iotbci.ServerOptions{
+		Obfs: iotbci.ObfsOptions{
+			ASCII:              asciiMode,
+			CustomTables:       customTables,
+			PaddingMin:         paddingMin,
+			PaddingMax:         paddingMax,
+			EnablePureDownlink: enablePureDownlink,
+			EnablePackedUplink: true,
+		},
+		Security: iotbci.SecurityOptions{
+			PSK:              psk,
+			HandshakeAEAD:    hsAEAD,
+			SessionAEAD:      sessAEAD,
+			HandshakeTimeout: 2 * time.Second,
+			TimeSkew:         2 * time.Minute,
+			MaxHandshakeSize: 8 * 1024,
+			ReplayWindow:     5 * time.Minute,
+			ReplayCacheSize:  1024,
+		},
+		Identity: iotbci.IdentityOptions{
+			MasterPublicKey: masterPub,
+			LocalCert:       serverCert,
+			LocalPrivateKey: serverPriv,
+		},
+	}
+
+	clientOpts := &amp;iotbci.ClientOptions{
+		Obfs: iotbci.ObfsOptions{
+			ASCII:              asciiMode,
+			CustomTables:       customTables,
+			PaddingMin:         paddingMin,
+			PaddingMax:         paddingMax,
+			EnablePureDownlink: enablePureDownlink,
+			EnablePackedUplink: true,
+		},
+		Security: iotbci.SecurityOptions{
+			PSK:              psk,
+			HandshakeAEAD:    hsAEAD,
+			SessionAEAD:      sessAEAD,
+			HandshakeTimeout: 2 * time.Second,
+			TimeSkew:         2 * time.Minute,
+			MaxHandshakeSize: 8 * 1024,
+		},
+		Identity: iotbci.IdentityOptions{
+			MasterPublicKey: masterPub,
+			LocalCert:       clientCert,
+			LocalPrivateKey: clientPriv,
+		},
+	}
+
+	// Precompute shared Sudoku structures before measuring memory/latency.
+	sudoku.Precompute()
+
+	// Align with DTLS/MQTT baselines: generate key/cert material outside timed region.
+	runtime.GC()
+	mem := StartMemSampler(5 * time.Millisecond)
+	start := time.Now()
+
+	clientStats := &amp;WireStats{}
+	serverStats := &amp;WireStats{}
+
+	sRaw, cRaw := netPipe()
+	defer sRaw.Close()
+	defer cRaw.Close()
+
+	sCount := WrapConn(sRaw, serverStats)
+	cCount := WrapConn(cRaw, clientStats)
+
+	// Server handshake + echo loop.
+	serverErr := make(chan error, 1)
+	go func() {
+		sConn, _, err := iotbci.ServerHandshake(ctx, sCount, serverOpts)
+		if err != nil {
+			serverErr &lt;- err
+			return
+		}
+		defer sConn.Close()
+		payload := make([]byte, cfg.PayloadSize)
+		for i := 0; i &lt; cfg.Messages; i++ {
+			if err := readFull(sConn, payload); err != nil {
+				serverErr &lt;- err
+				return
+			}
+			if err := writeFull(sConn, payload); err != nil {
+				serverErr &lt;- err
+				return
+			}
+		}
+		serverErr &lt;- nil
+	}()
+
+	cConn, _, err := iotbci.ClientHandshake(ctx, cCount, clientOpts)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer cConn.Close()
+
+	payload := make([]byte, cfg.PayloadSize)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+	resp := make([]byte, len(payload))
+
+	rtts := make([]time.Duration, 0, cfg.Messages)
+	warmup := rttWarmupCount(cfg.Messages)
+	for i := 0; i &lt; cfg.Messages; i++ {
+		select {
+		case &lt;-ctx.Done():
+			return ProtocolResult{}, ctx.Err()
+		default:
+		}
+		t0 := time.Now()
+		if err := writeFull(cConn, payload); err != nil {
+			return ProtocolResult{}, err
+		}
+		if err := readFull(cConn, resp); err != nil {
+			return ProtocolResult{}, err
+		}
+		if !bytes.Equal(resp, payload) {
+			return ProtocolResult{}, fmt.Errorf(&quot;iotbci-sudoku echo mismatch&quot;)
+		}
+		if i &gt;= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
+	}
+	if err := &lt;-serverErr; err != nil {
+		return ProtocolResult{}, err
+	}
+
+	peak := mem.Stop()
+	dur := time.Since(start)
+
+	wireBytes := clientStats.BytesWritten.Load() + serverStats.BytesWritten.Load()
+	payloadBytes := int64(cfg.Messages * cfg.PayloadSize * 2)
+
+	var freq [256]uint64
+	f1 := clientStats.SnapshotWrittenFreq()
+	f2 := serverStats.SnapshotWrittenFreq()
+	for i := 0; i &lt; 256; i++ {
+		freq[i] = f1[i] + f2[i]
+	}
+	bs := ComputeByteStats(freq)
+
+	avg := avgDuration(rtts)
+	p95 := percentileDuration(rtts, 0.95)
+
+	name := &quot;iotbci-sudoku&quot;
+	if enablePureDownlink {
+		name += &quot;-pure&quot;
+	} else {
+		name += &quot;-packed&quot;
+	}
+
+	ws := summarizeWire(clientStats, serverStats)
+	durSec := dur.Seconds()
+	var payloadBps, wireBps float64
+	if durSec &gt; 0 {
+		payloadBps = float64(payloadBytes) / durSec
+		wireBps = float64(wireBytes) / durSec
+	}
+
+	return ProtocolResult{
+		Name:                          name,
+		Messages:                      cfg.Messages,
+		PayloadSize:                   cfg.PayloadSize,
+		PayloadBytesTotal:             payloadBytes,
+		WireBytesTotal:                wireBytes,
+		OverheadRatio:                 float64(wireBytes) / float64(payloadBytes),
+		AvgRTTMillis:                  float64(avg) / float64(time.Millisecond),
+		P95RTTMillis:                  float64(p95) / float64(time.Millisecond),
+		WireWriteCalls:                ws.writeCalls,
+		WireReadCalls:                 ws.readCalls,
+		WireWriteSizeBinsLog2:         ws.writeSizeBins,
+		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
+		WireActiveDurationMillis:      ws.activeDurationMillis,
+		WireEntropy:                   bs.Entropy,
+		WireASCIIRatio:                bs.ASCIIRatio,
+		PeakHeapAllocBytes:            peak.HeapAlloc,
+		PeakHeapInuseBytes:            peak.HeapInuse,
+		PeakSysBytes:                  peak.Sys,
+		PayloadThroughputBps:          payloadBps,
+		WireThroughputBps:             wireBps,
+		DurationMillis:                float64(dur) / float64(time.Millisecond),
+	}, nil
+}
+
+func hex8(b []byte) string {
+	if len(b) &lt; 8 {
+		return &quot;&quot;
+	}
+	var out [16]byte
+	const hex = &quot;0123456789abcdef&quot;
+	for i := 0; i &lt; 8; i++ {
+		out[i*2] = hex[b[i]&gt;&gt;4]
+		out[i*2+1] = hex[b[i]&amp;0x0F]
+	}
+	return string(out[:])
+}
+</pre></details><details class="card"><summary><b>IoTBCI-Sudoku (loopback TCP)</b> — <code>internal/bench/run_iotbci_sudoku_net.go</code></summary><pre>package bench
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;crypto/ed25519&quot;
+	&quot;crypto/rand&quot;
+	&quot;crypto/sha256&quot;
+	&quot;fmt&quot;
+	&quot;net&quot;
+	&quot;runtime&quot;
+	&quot;time&quot;
+
+	&quot;github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci&quot;
+	&quot;github.com/BlingCc233/IoT_BCI-sudoku/pkg/obfs/sudoku&quot;
+)
+
+func RunIoTBCISudokuOnTCP(ctx context.Context, cfg RunConfig, enablePureDownlink bool, paddingMin, paddingMax int, listenAddr string, ready ReadyFunc) (ProtocolResult, error) {
+	if cfg.Messages &lt;= 0 {
+		cfg.Messages = 1000
+	}
+	if cfg.PayloadSize &lt;= 0 {
+		cfg.PayloadSize = 256
+	}
+
+	// Identity &amp; certs (master-signed).
+	masterPub, masterPriv, _ := ed25519.GenerateKey(rand.Reader)
+	serverPub, serverPriv, _ := ed25519.GenerateKey(rand.Reader)
+	clientPub, clientPriv, _ := ed25519.GenerateKey(rand.Reader)
+
+	now := time.Now()
+	serverCert, err := iotbci.IssueCert(masterPriv, &quot;server-1&quot;, serverPub, now.Add(-time.Hour), now.Add(24*time.Hour), 1)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	clientCert, err := iotbci.IssueCert(masterPriv, &quot;device-1&quot;, clientPub, now.Add(-time.Hour), now.Add(24*time.Hour), 2)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+
+	// Shared PSK for handshake protection + obfs seed.
+	sum := sha256.Sum256([]byte(now.String()))
+	psk := &quot;bench-psk:&quot; + hex8(sum[:])
+
+	asciiMode := &quot;prefer_entropy&quot;
+	customTables := []string{&quot;xppppxvv&quot;}
+	if enablePureDownlink {
+		asciiMode = &quot;prefer_ascii&quot;
+		customTables = nil
+	}
+
+	// Prefer AES-GCM on platforms with hardware support; aligns with DTLS baseline cipher-suite.
+	hsAEAD := iotbci.AEADAES128GCM
+	sessAEAD := iotbci.AEADAES128GCM
+
+	serverOpts := &amp;iotbci.ServerOptions{
+		Obfs: iotbci.ObfsOptions{
+			ASCII:              asciiMode,
+			CustomTables:       customTables,
+			PaddingMin:         paddingMin,
+			PaddingMax:         paddingMax,
+			EnablePureDownlink: enablePureDownlink,
+			EnablePackedUplink: true,
+		},
+		Security: iotbci.SecurityOptions{
+			PSK:              psk,
+			HandshakeAEAD:    hsAEAD,
+			SessionAEAD:      sessAEAD,
+			HandshakeTimeout: 2 * time.Second,
+			TimeSkew:         2 * time.Minute,
+			MaxHandshakeSize: 8 * 1024,
+			ReplayWindow:     5 * time.Minute,
+			ReplayCacheSize:  1024,
+		},
+		Identity: iotbci.IdentityOptions{
+			MasterPublicKey: masterPub,
+			LocalCert:       serverCert,
+			LocalPrivateKey: serverPriv,
+		},
+	}
+
+	clientOpts := &amp;iotbci.ClientOptions{
+		Obfs: iotbci.ObfsOptions{
+			ASCII:              asciiMode,
+			CustomTables:       customTables,
+			PaddingMin:         paddingMin,
+			PaddingMax:         paddingMax,
+			EnablePureDownlink: enablePureDownlink,
+			EnablePackedUplink: true,
+		},
+		Security: iotbci.SecurityOptions{
+			PSK:              psk,
+			HandshakeAEAD:    hsAEAD,
+			SessionAEAD:      sessAEAD,
+			HandshakeTimeout: 2 * time.Second,
+			TimeSkew:         2 * time.Minute,
+			MaxHandshakeSize: 8 * 1024,
+		},
+		Identity: iotbci.IdentityOptions{
+			MasterPublicKey: masterPub,
+			LocalCert:       clientCert,
+			LocalPrivateKey: clientPriv,
+		},
+	}
+
+	// Precompute shared Sudoku structures before measuring memory/latency.
+	sudoku.Precompute()
+
+	// Align with DTLS/MQTT baselines: generate key/cert material outside timed region.
+	runtime.GC()
+	mem := StartMemSampler(5 * time.Millisecond)
+	start := time.Now()
+
+	clientStats := &amp;WireStats{}
+	serverStats := &amp;WireStats{}
+
+	ln, err := net.Listen(&quot;tcp&quot;, listenAddr)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer ln.Close()
+	go func() {
+		&lt;-ctx.Done()
+		_ = ln.Close()
+	}()
+
+	// Server handshake + echo loop.
+	serverErr := make(chan error, 1)
+	go func() {
+		raw, err := ln.Accept()
+		if err != nil {
+			serverErr &lt;- err
+			return
+		}
+		defer raw.Close()
+		tuneLowLatencyTCPConn(raw)
+
+		sCount := WrapConn(raw, serverStats)
+		sConn, _, err := iotbci.ServerHandshake(ctx, sCount, serverOpts)
+		if err != nil {
+			serverErr &lt;- err
+			return
+		}
+		defer sConn.Close()
+
+		payload := make([]byte, cfg.PayloadSize)
+		for i := 0; i &lt; cfg.Messages; i++ {
+			if err := readFull(sConn, payload); err != nil {
+				serverErr &lt;- err
+				return
+			}
+			if err := writeFull(sConn, payload); err != nil {
+				serverErr &lt;- err
+				return
+			}
+		}
+		serverErr &lt;- nil
+	}()
+
+	port := ln.Addr().(*net.TCPAddr).Port
+	if ready != nil {
+		ready([]uint16{uint16(port)}, nil)
+	}
+
+	rawClient, err := net.DialTimeout(&quot;tcp&quot;, ln.Addr().String(), 3*time.Second)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer rawClient.Close()
+	tuneLowLatencyTCPConn(rawClient)
+
+	cCount := WrapConn(rawClient, clientStats)
+	cConn, _, err := iotbci.ClientHandshake(ctx, cCount, clientOpts)
+	if err != nil {
+		return ProtocolResult{}, err
+	}
+	defer cConn.Close()
+
+	payload := make([]byte, cfg.PayloadSize)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+	resp := make([]byte, len(payload))
+
+	rtts := make([]time.Duration, 0, cfg.Messages)
+	warmup := rttWarmupCount(cfg.Messages)
+	for i := 0; i &lt; cfg.Messages; i++ {
+		select {
+		case &lt;-ctx.Done():
+			return ProtocolResult{}, ctx.Err()
+		default:
+		}
+		t0 := time.Now()
+		if err := writeFull(cConn, payload); err != nil {
+			return ProtocolResult{}, err
+		}
+		if err := readFull(cConn, resp); err != nil {
+			return ProtocolResult{}, err
+		}
+		if !bytes.Equal(resp, payload) {
+			return ProtocolResult{}, fmt.Errorf(&quot;iotbci-sudoku echo mismatch&quot;)
+		}
+		if i &gt;= warmup {
+			rtts = append(rtts, time.Since(t0))
+		}
+	}
+	if err := &lt;-serverErr; err != nil {
+		return ProtocolResult{}, err
+	}
+
+	peak := mem.Stop()
+	dur := time.Since(start)
+
+	wireBytes := clientStats.BytesWritten.Load() + serverStats.BytesWritten.Load()
+	payloadBytes := int64(cfg.Messages * cfg.PayloadSize * 2)
+
+	var freq [256]uint64
+	f1 := clientStats.SnapshotWrittenFreq()
+	f2 := serverStats.SnapshotWrittenFreq()
+	for i := 0; i &lt; 256; i++ {
+		freq[i] = f1[i] + f2[i]
+	}
+	bs := ComputeByteStats(freq)
+
+	avg := avgDuration(rtts)
+	p95 := percentileDuration(rtts, 0.95)
+
+	name := &quot;iotbci-sudoku&quot;
+	if enablePureDownlink {
+		name += &quot;-pure&quot;
+	} else {
+		name += &quot;-packed&quot;
+	}
+	name += &quot;-tcp&quot;
+
+	ws := summarizeWire(clientStats, serverStats)
+	durSec := dur.Seconds()
+	var payloadBps, wireBps float64
+	if durSec &gt; 0 {
+		payloadBps = float64(payloadBytes) / durSec
+		wireBps = float64(wireBytes) / durSec
+	}
+
+	return ProtocolResult{
+		Name:                          name,
+		Messages:                      cfg.Messages,
+		PayloadSize:                   cfg.PayloadSize,
+		PayloadBytesTotal:             payloadBytes,
+		WireBytesTotal:                wireBytes,
+		OverheadRatio:                 float64(wireBytes) / float64(payloadBytes),
+		AvgRTTMillis:                  float64(avg) / float64(time.Millisecond),
+		P95RTTMillis:                  float64(p95) / float64(time.Millisecond),
+		WireWriteCalls:                ws.writeCalls,
+		WireReadCalls:                 ws.readCalls,
+		WireWriteSizeBinsLog2:         ws.writeSizeBins,
+		WireWriteInterArrivalMsBinsL2: ws.writeIATBins,
+		WireWriteSizeSeqSample:        ws.writeSizeSeq,
+		WireWriteIATMsSeqSample:       ws.writeIATMsSeq,
+		WireActiveDurationMillis:      ws.activeDurationMillis,
+		WireEntropy:                   bs.Entropy,
+		WireASCIIRatio:                bs.ASCIIRatio,
+		PeakHeapAllocBytes:            peak.HeapAlloc,
+		PeakHeapInuseBytes:            peak.HeapInuse,
+		PeakSysBytes:                  peak.Sys,
+		PayloadThroughputBps:          payloadBps,
+		WireThroughputBps:             wireBps,
+		DurationMillis:                float64(dur) / float64(time.Millisecond),
+	}, nil
+}
+</pre></details><details class="card"><summary><b>Sudoku obfs fast RNG (non-crypto)</b> — <code>pkg/obfs/sudoku/fast_rng.go</code></summary><pre>package sudoku
+
+import (
+	crypto_rand &quot;crypto/rand&quot;
+	&quot;encoding/binary&quot;
+	&quot;time&quot;
+)
+
+// fastRNG is a small, fast, non-cryptographic PRNG for traffic-appearance randomness.
+//
+// We intentionally do NOT use it for any cryptographic purpose. It is used only for:
+// - choosing a random puzzle/permutation
+// - deciding whether to insert padding bytes
+//
+// This avoids the overhead of math/rand in hot paths.
+type fastRNG struct {
+	s0 uint64
+	s1 uint64
+
+	u32Cached bool
+	u32Cache  uint32
+}
+
+func newFastRNG() fastRNG {
+	var seedBytes [16]byte
+	if _, err := crypto_rand.Read(seedBytes[:]); err != nil {
+		// Last-resort fallback (still fine for non-crypto randomness).
+		now := uint64(time.Now().UnixNano())
+		binary.LittleEndian.PutUint64(seedBytes[0:8], now)
+		binary.LittleEndian.PutUint64(seedBytes[8:16], now^0x9e3779b97f4a7c15)
+	}
+	seed0 := binary.LittleEndian.Uint64(seedBytes[0:8])
+	seed1 := binary.LittleEndian.Uint64(seedBytes[8:16])
+
+	// Initialize xoroshiro state via splitmix64 expansion.
+	s0 := splitmix64(&amp;seed0)
+	s1 := splitmix64(&amp;seed1)
+	if s0 == 0 &amp;&amp; s1 == 0 {
+		s1 = 1
+	}
+	return fastRNG{s0: s0, s1: s1}
+}
+
+func splitmix64(x *uint64) uint64 {
+	*x += 0x9e3779b97f4a7c15
+	z := *x
+	z = (z ^ (z &gt;&gt; 30)) * 0xbf58476d1ce4e5b9
+	z = (z ^ (z &gt;&gt; 27)) * 0x94d049bb133111eb
+	return z ^ (z &gt;&gt; 31)
+}
+
+func rotl64(x uint64, k int) uint64 { return (x &lt;&lt; k) | (x &gt;&gt; (64 - k)) }
+
+// Uint64 returns the next 64 bits from xoroshiro128+.
+func (r *fastRNG) Uint64() uint64 {
+	s0 := r.s0
+	s1 := r.s1
+	res := s0 + s1
+
+	s1 ^= s0
+	r.s0 = rotl64(s0, 55) ^ s1 ^ (s1 &lt;&lt; 14)
+	r.s1 = rotl64(s1, 36)
+	return res
+}
+
+func (r *fastRNG) Uint32() uint32 {
+	// Amortize the xoroshiro128+ step: each Uint64 yields two Uint32 values.
+	if r.u32Cached {
+		r.u32Cached = false
+		return r.u32Cache
+	}
+	v := r.Uint64()
+	r.u32Cache = uint32(v &gt;&gt; 32)
+	r.u32Cached = true
+	return uint32(v)
+}
+
+// Float32 returns a uniform float32 in [0,1).
+func (r *fastRNG) Float32() float32 {
+	// Use the top 24 bits to fill float32 mantissa-like range.
+	return float32(r.Uint32()&gt;&gt;8) / float32(1&lt;&lt;24)
+}
+</pre></details><details class="card"><summary><b>Sudoku obfs Conn (pure)</b> — <code>pkg/obfs/sudoku/conn.go</code></summary><pre>package sudoku
+
+import (
+	&quot;bufio&quot;
+	&quot;bytes&quot;
+	&quot;errors&quot;
+	&quot;net&quot;
+	&quot;sync&quot;
+)
+
+const IOBufferSize = 32 * 1024
+
+type Conn struct {
+	net.Conn
+	table  *Table
+	reader *bufio.Reader
+
+	recorder   *bytes.Buffer
+	recording  bool
+	recordLock sync.Mutex
+
+	rawBuf      []byte
+	pendingData []byte
+	hintBuf     [4]byte
+	hintCount   int
+
+	rng          fastRNG
+	paddingRate  float32
+	padThreshold uint32
+	padPool      []byte
+	padLen       int
+
+	writeMu  sync.Mutex
+	writeBuf []byte
+}
+
+func NewConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int, record bool) *Conn {
+	localRng := newFastRNG()
+
+	min := float32(paddingMinPct) / 100.0
+	rngRange := float32(paddingMaxPct-paddingMinPct) / 100.0
+	rate := min + localRng.Float32()*rngRange
+	threshold := func() uint32 {
+		if rate &lt;= 0 {
+			return 0
+		}
+		if rate &gt;= 1 {
+			return ^uint32(0)
+		}
+		return uint32(float64(rate) * 4294967295.0)
+	}()
+
+	sc := &amp;Conn{
+		Conn:         c,
+		table:        table,
+		reader:       bufio.NewReaderSize(c, IOBufferSize),
+		rawBuf:       make([]byte, IOBufferSize),
+		pendingData:  make([]byte, 0, IOBufferSize/4),
+		rng:          localRng,
+		paddingRate:  rate,
+		padThreshold: threshold,
+		padPool:      table.PaddingPool,
+		padLen:       len(table.PaddingPool),
+		writeBuf:     make([]byte, 0, 4096),
+	}
+	if record {
+		sc.recorder = new(bytes.Buffer)
+		sc.recording = true
+	}
+	return sc
+}
+
+func (sc *Conn) CloseWrite() error {
+	if sc == nil || sc.Conn == nil {
+		return nil
+	}
+	if cw, ok := sc.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return nil
+}
+
+func (sc *Conn) CloseRead() error {
+	if sc == nil || sc.Conn == nil {
+		return nil
+	}
+	if cr, ok := sc.Conn.(interface{ CloseRead() error }); ok {
+		return cr.CloseRead()
+	}
+	return nil
+}
+
+func (sc *Conn) StopRecording() {
+	sc.recordLock.Lock()
+	sc.recording = false
+	sc.recorder = nil
+	sc.recordLock.Unlock()
+}
+
+func (sc *Conn) GetBufferedAndRecorded() []byte {
+	if sc == nil {
+		return nil
+	}
+
+	sc.recordLock.Lock()
+	defer sc.recordLock.Unlock()
+
+	var recorded []byte
+	if sc.recorder != nil {
+		recorded = sc.recorder.Bytes()
+	}
+
+	buffered := sc.reader.Buffered()
+	if buffered &lt;= 0 {
+		return recorded
+	}
+	peeked, _ := sc.reader.Peek(buffered)
+	full := make([]byte, 0, len(recorded)+len(peeked))
+	full = append(full, recorded...)
+	full = append(full, peeked...)
+	return full
+}
+
+func (sc *Conn) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	sc.writeMu.Lock()
+	defer sc.writeMu.Unlock()
+
+	pads := sc.padPool
+	padLen := sc.padLen
+	rng := &amp;sc.rng
+	padThreshold := sc.padThreshold
+	encodeTable := &amp;sc.table.EncodeTable
+	hasPadding := padThreshold != 0 &amp;&amp; padLen &gt; 0
+
+	needed := len(p)*4 + 16
+	if hasPadding {
+		needed = len(p)*6 + 16
+	}
+	if cap(sc.writeBuf) &lt; needed {
+		sc.writeBuf = make([]byte, 0, needed)
+	}
+	out := sc.writeBuf[:0]
+
+	if !hasPadding {
+		outLen := len(p) * 4
+		out = sc.writeBuf[:outLen]
+		oi := 0
+		puzzleIdx := rng.Uint32() &amp; 7
+		for _, b := range p {
+			puzzles := (*encodeTable)[b]
+			puzzle := puzzles[int(puzzleIdx)]
+			puzzleIdx = (puzzleIdx + 1) &amp; 7
+			out[oi] = puzzle[0]
+			out[oi+1] = puzzle[1]
+			out[oi+2] = puzzle[2]
+			out[oi+3] = puzzle[3]
+			oi += 4
+		}
+		_, err := sc.Conn.Write(out)
+		sc.writeBuf = out[:0]
+		return len(p), err
+	}
+
+	for _, b := range p {
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+
+		puzzles := (*encodeTable)[b]
+		puzzle := puzzles[int(rng.Uint32()&amp;7)]
+
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+		out = append(out, puzzle[0])
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+		out = append(out, puzzle[1])
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+		out = append(out, puzzle[2])
+		if rng.Uint32() &lt;= padThreshold {
+			out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+		}
+		out = append(out, puzzle[3])
+	}
+
+	if rng.Uint32() &lt;= padThreshold {
+		out = append(out, pads[int(uint64(rng.Uint32())*uint64(padLen)&gt;&gt;32)])
+	}
+
+	_, err := sc.Conn.Write(out)
+	sc.writeBuf = out[:0]
+	return len(p), err
+}
+
+func (sc *Conn) Read(p []byte) (int, error) {
+	if len(sc.pendingData) &gt; 0 {
+		n := copy(p, sc.pendingData)
+		if n == len(sc.pendingData) {
+			sc.pendingData = sc.pendingData[:0]
+		} else {
+			sc.pendingData = sc.pendingData[n:]
+		}
+		return n, nil
+	}
+
+	hasPadding := sc.padThreshold != 0 &amp;&amp; sc.padLen &gt; 0
+
+	for {
+		if len(sc.pendingData) &gt;= len(p) {
+			break
+		}
+
+		nr, rErr := sc.reader.Read(sc.rawBuf)
+		if nr &gt; 0 {
+			chunk := sc.rawBuf[:nr]
+			sc.recordLock.Lock()
+			if sc.recording {
+				sc.recorder.Write(chunk)
+			}
+			sc.recordLock.Unlock()
+
+			if !hasPadding {
+				// Fast path: in no-padding mode, every wire byte is a hint and every 4 hints decode to 1 byte.
+				need := (nr+sc.hintCount)/4 + 16
+				if cap(sc.pendingData)-len(sc.pendingData) &lt; need {
+					newCap := len(sc.pendingData) + need
+					buf := make([]byte, len(sc.pendingData), newCap)
+					copy(buf, sc.pendingData)
+					sc.pendingData = buf
+				}
+
+				i := 0
+				if sc.hintCount != 0 {
+					for sc.hintCount &lt; 4 &amp;&amp; i &lt; len(chunk) {
+						sc.hintBuf[sc.hintCount] = chunk[i]
+						sc.hintCount++
+						i++
+					}
+					if sc.hintCount == 4 {
+						key := uint32(sc.hintBuf[0])&lt;&lt;24 | uint32(sc.hintBuf[1])&lt;&lt;16 | uint32(sc.hintBuf[2])&lt;&lt;8 | uint32(sc.hintBuf[3])
+						val, ok := sc.table.Decode(key)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						sc.pendingData = append(sc.pendingData, val)
+						sc.hintCount = 0
+					}
+				}
+
+				rem := chunk[i:]
+				full := len(rem) &amp;^ 3
+				decoded := full / 4
+				if decoded &gt; 0 {
+					start := len(sc.pendingData)
+					sc.pendingData = sc.pendingData[:start+decoded]
+					di := start
+					for j := 0; j &lt; full; j += 4 {
+						key := uint32(rem[j])&lt;&lt;24 | uint32(rem[j+1])&lt;&lt;16 | uint32(rem[j+2])&lt;&lt;8 | uint32(rem[j+3])
+						val, ok := sc.table.Decode(key)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						sc.pendingData[di] = val
+						di++
+					}
+				}
+
+				tail := rem[full:]
+				copy(sc.hintBuf[:], tail)
+				sc.hintCount = len(tail)
+			} else {
+				// Conservative: worst-case all bytes are hints -&gt; 4 hints per decoded byte.
+				if cap(sc.pendingData)-len(sc.pendingData) &lt; (nr/4)+16 {
+					newCap := len(sc.pendingData) + (nr / 4) + 16
+					buf := make([]byte, len(sc.pendingData), newCap)
+					copy(buf, sc.pendingData)
+					sc.pendingData = buf
+				}
+
+				layout := sc.table.layout
+				for _, b := range chunk {
+					if !layout.isHint(b) {
+						continue
+					}
+
+					sc.hintBuf[sc.hintCount] = b
+					sc.hintCount++
+					if sc.hintCount == 4 {
+						key := uint32(sc.hintBuf[0])&lt;&lt;24 | uint32(sc.hintBuf[1])&lt;&lt;16 | uint32(sc.hintBuf[2])&lt;&lt;8 | uint32(sc.hintBuf[3])
+						val, ok := sc.table.Decode(key)
+						if !ok {
+							return 0, ErrInvalidSudokuMapMiss
+						}
+						sc.pendingData = append(sc.pendingData, val)
+						sc.hintCount = 0
+					}
+				}
+			}
+		}
+		if rErr != nil {
+			if errors.Is(rErr, net.ErrClosed) &amp;&amp; len(sc.pendingData) &gt; 0 {
+				break
+			}
+			return 0, rErr
+		}
+		if len(sc.pendingData) &gt;= len(p) {
+			break
+		}
+	}
+
+	n := copy(p, sc.pendingData)
+	if n == len(sc.pendingData) {
+		sc.pendingData = sc.pendingData[:0]
+	} else {
+		sc.pendingData = sc.pendingData[n:]
+	}
+	return n, nil
+}
+</pre></details><details class="card"><summary><b>Sudoku obfs PackedConn (6-bit)</b> — <code>pkg/obfs/sudoku/packed.go</code></summary><pre>package sudoku
+
+import (
+	&quot;bufio&quot;
+	&quot;bytes&quot;
+	&quot;io&quot;
+	&quot;net&quot;
+	&quot;sync&quot;
+)
+
+// PackedConn packs plaintext into 6-bit groups on the write path, which improves downlink
+// bandwidth utilization when ciphertext is already high-entropy (AEAD recommended).
+type PackedConn struct {
+	net.Conn
+	table  *Table
+	reader *bufio.Reader
+
+	recorder   *bytes.Buffer
+	recording  bool
+	recordLock sync.Mutex
+
+	rawBuf      []byte
+	pendingData []byte
+
+	writeMu  sync.Mutex
+	writeBuf []byte
+	bitBuf   uint64
+	bitCount int
+
+	readBitBuf uint64
+	readBits   int
+
+	rng          fastRNG
+	paddingRate  float32
+	padThreshold uint32
+	padMarker    byte
+	padPool      []byte
+}
+
+func NewPackedConn(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int) *PackedConn {
+	return NewPackedConnWithRecord(c, table, paddingMinPct, paddingMaxPct, false)
+}
+
+func NewPackedConnWithRecord(c net.Conn, table *Table, paddingMinPct, paddingMaxPct int, record bool) *PackedConn {
+	localRng := newFastRNG()
+
+	min := float32(paddingMinPct) / 100.0
+	rngRange := float32(paddingMaxPct-paddingMinPct) / 100.0
+	rate := min + localRng.Float32()*rngRange
+
+	pc := &amp;PackedConn{
+		Conn:        c,
+		table:       table,
+		reader:      bufio.NewReaderSize(c, IOBufferSize),
+		rawBuf:      make([]byte, IOBufferSize),
+		pendingData: make([]byte, 0, 4096),
+		writeBuf:    make([]byte, 0, 4096),
+		rng:         localRng,
+		paddingRate: rate,
+		padThreshold: func() uint32 {
+			if rate &lt;= 0 {
+				return 0
+			}
+			if rate &gt;= 1 {
+				return ^uint32(0)
+			}
+			return uint32(float64(rate) * 4294967295.0)
+		}(),
+	}
+	if record {
+		pc.recorder = new(bytes.Buffer)
+		pc.recording = true
+	}
+
+	pc.padMarker = table.layout.padMarker
+	for _, b := range table.PaddingPool {
+		if b != pc.padMarker {
+			pc.padPool = append(pc.padPool, b)
+		}
+	}
+	if len(pc.padPool) == 0 {
+		pc.padPool = append(pc.padPool, pc.padMarker)
+	}
+	return pc
+}
+
+func (pc *PackedConn) CloseWrite() error {
+	if pc == nil || pc.Conn == nil {
+		return nil
+	}
+	var firstErr error
+	if err := pc.Flush(); err != nil &amp;&amp; firstErr == nil {
+		firstErr = err
+	}
+	if cw, ok := pc.Conn.(interface{ CloseWrite() error }); ok {
+		if err := cw.CloseWrite(); err != nil &amp;&amp; firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (pc *PackedConn) CloseRead() error {
+	if pc == nil || pc.Conn == nil {
+		return nil
+	}
+	if cr, ok := pc.Conn.(interface{ CloseRead() error }); ok {
+		return cr.CloseRead()
+	}
+	return nil
+}
+
+func (pc *PackedConn) StopRecording() {
+	pc.recordLock.Lock()
+	pc.recording = false
+	pc.recorder = nil
+	pc.recordLock.Unlock()
+}
+
+func (pc *PackedConn) GetBufferedAndRecorded() []byte {
+	if pc == nil {
+		return nil
+	}
+
+	pc.recordLock.Lock()
+	defer pc.recordLock.Unlock()
+
+	var recorded []byte
+	if pc.recorder != nil {
+		recorded = pc.recorder.Bytes()
+	}
+
+	buffered := pc.reader.Buffered()
+	if buffered &lt;= 0 {
+		return recorded
+	}
+	peeked, _ := pc.reader.Peek(buffered)
+	full := make([]byte, 0, len(recorded)+len(peeked))
+	full = append(full, recorded...)
+	full = append(full, peeked...)
+	return full
+}
+
+func (pc *PackedConn) getPaddingByte() byte {
+	return pc.padPool[pc.fastIndex(len(pc.padPool))]
+}
+
+func (pc *PackedConn) maybeAddPadding(out []byte) []byte {
+	if pc.padThreshold != 0 &amp;&amp; pc.rng.Uint32() &lt;= pc.padThreshold {
+		out = append(out, pc.getPaddingByte())
+	}
+	return out
+}
+
+func (pc *PackedConn) fastIndex(n int) int {
+	return int(uint64(pc.rng.Uint32()) * uint64(n) &gt;&gt; 32)
+}
+
+func (pc *PackedConn) encodeGroup(group6b byte) byte {
+	return pc.table.layout.encodeGroup(group6b)
+}
+
+func (pc *PackedConn) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	pc.writeMu.Lock()
+	defer pc.writeMu.Unlock()
+
+	needed := len(p)*3/2 + 32
+	if cap(pc.writeBuf) &lt; needed {
+		pc.writeBuf = make([]byte, 0, needed)
+	}
+	out := pc.writeBuf[:0]
+	hasPadding := pc.padThreshold != 0
+
+	i := 0
+	n := len(p)
+
+	// Align any pending bits.
+	for pc.bitCount &gt; 0 &amp;&amp; i &lt; n {
+		if hasPadding &amp;&amp; pc.rng.Uint32() &lt;= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
+		b := p[i]
+		i++
+		pc.bitBuf = (pc.bitBuf &lt;&lt; 8) | uint64(b)
+		pc.bitCount += 8
+		for pc.bitCount &gt;= 6 {
+			pc.bitCount -= 6
+			group := byte(pc.bitBuf &gt;&gt; pc.bitCount)
+			if pc.bitCount == 0 {
+				pc.bitBuf = 0
+			} else {
+				pc.bitBuf &amp;= (1 &lt;&lt; pc.bitCount) - 1
+			}
+			if hasPadding &amp;&amp; pc.rng.Uint32() &lt;= pc.padThreshold {
+				out = append(out, pc.getPaddingByte())
+			}
+			out = append(out, pc.encodeGroup(group&amp;0x3F))
+		}
+	}
+
+	// Fast path: 3 bytes -&gt; 4 groups.
+	for i+2 &lt; n {
+		b1, b2, b3 := p[i], p[i+1], p[i+2]
+		i += 3
+
+		g1 := (b1 &gt;&gt; 2) &amp; 0x3F
+		g2 := ((b1 &amp; 0x03) &lt;&lt; 4) | ((b2 &gt;&gt; 4) &amp; 0x0F)
+		g3 := ((b2 &amp; 0x0F) &lt;&lt; 2) | ((b3 &gt;&gt; 6) &amp; 0x03)
+		g4 := b3 &amp; 0x3F
+
+		if hasPadding &amp;&amp; pc.rng.Uint32() &lt;= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
+		out = append(out, pc.encodeGroup(g1))
+		if hasPadding &amp;&amp; pc.rng.Uint32() &lt;= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
+		out = append(out, pc.encodeGroup(g2))
+		if hasPadding &amp;&amp; pc.rng.Uint32() &lt;= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
+		out = append(out, pc.encodeGroup(g3))
+		if hasPadding &amp;&amp; pc.rng.Uint32() &lt;= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
+		out = append(out, pc.encodeGroup(g4))
+	}
+
+	// Tail bytes.
+	for ; i &lt; n; i++ {
+		b := p[i]
+		pc.bitBuf = (pc.bitBuf &lt;&lt; 8) | uint64(b)
+		pc.bitCount += 8
+		for pc.bitCount &gt;= 6 {
+			pc.bitCount -= 6
+			group := byte(pc.bitBuf &gt;&gt; pc.bitCount)
+			if pc.bitCount == 0 {
+				pc.bitBuf = 0
+			} else {
+				pc.bitBuf &amp;= (1 &lt;&lt; pc.bitCount) - 1
+			}
+			if hasPadding &amp;&amp; pc.rng.Uint32() &lt;= pc.padThreshold {
+				out = append(out, pc.getPaddingByte())
+			}
+			out = append(out, pc.encodeGroup(group&amp;0x3F))
+		}
+	}
+
+	// Residual bits: emit one group + pad marker.
+	if pc.bitCount &gt; 0 {
+		if hasPadding &amp;&amp; pc.rng.Uint32() &lt;= pc.padThreshold {
+			out = append(out, pc.getPaddingByte())
+		}
+		group := byte(pc.bitBuf &lt;&lt; (6 - pc.bitCount))
+		pc.bitBuf = 0
+		pc.bitCount = 0
+		out = append(out, pc.encodeGroup(group&amp;0x3F))
+		out = append(out, pc.padMarker)
+	}
+
+	if len(out) &gt; 0 {
+		_, err := pc.Conn.Write(out)
+		pc.writeBuf = out[:0]
+		return len(p), err
+	}
+	pc.writeBuf = out[:0]
+	return len(p), nil
+}
+
+func (pc *PackedConn) Flush() error {
+	pc.writeMu.Lock()
+	defer pc.writeMu.Unlock()
+
+	out := pc.writeBuf[:0]
+	if pc.bitCount &gt; 0 {
+		group := byte(pc.bitBuf &lt;&lt; (6 - pc.bitCount))
+		pc.bitBuf = 0
+		pc.bitCount = 0
+
+		out = append(out, pc.encodeGroup(group&amp;0x3F))
+		out = append(out, pc.padMarker)
+	}
+
+	if len(out) &gt; 0 {
+		_, err := pc.Conn.Write(out)
+		pc.writeBuf = out[:0]
+		return err
+	}
+	return nil
+}
+
+func (pc *PackedConn) Read(p []byte) (int, error) {
+	if len(pc.pendingData) &gt; 0 {
+		n := copy(p, pc.pendingData)
+		if n == len(pc.pendingData) {
+			pc.pendingData = pc.pendingData[:0]
+		} else {
+			pc.pendingData = pc.pendingData[n:]
+		}
+		return n, nil
+	}
+
+	for {
+		nr, rErr := pc.reader.Read(pc.rawBuf)
+		if nr &gt; 0 {
+			chunk := pc.rawBuf[:nr]
+			pc.recordLock.Lock()
+			if pc.recording {
+				pc.recorder.Write(chunk)
+			}
+			pc.recordLock.Unlock()
+
+			rBuf := pc.readBitBuf
+			rBits := pc.readBits
+			padMarker := pc.padMarker
+			layout := pc.table.layout
+
+			// Worst case: all bytes are hint groups =&gt; 6 bits each =&gt; ~3/4 bytes decoded.
+			need := (nr*3)/4 + 16
+			if cap(pc.pendingData)-len(pc.pendingData) &lt; need {
+				newCap := len(pc.pendingData) + need
+				buf := make([]byte, len(pc.pendingData), newCap)
+				copy(buf, pc.pendingData)
+				pc.pendingData = buf
+			}
+
+			for _, b := range chunk {
+				if !layout.isHint(b) {
+					if b == padMarker {
+						rBuf = 0
+						rBits = 0
+					}
+					continue
+				}
+
+				group, ok := layout.decodeGroup(b)
+				if !ok {
+					return 0, ErrInvalidSudokuMapMiss
+				}
+
+				rBuf = (rBuf &lt;&lt; 6) | uint64(group)
+				rBits += 6
+				if rBits &gt;= 8 {
+					rBits -= 8
+					val := byte(rBuf &gt;&gt; rBits)
+					pc.pendingData = append(pc.pendingData, val)
+				}
+			}
+
+			pc.readBitBuf = rBuf
+			pc.readBits = rBits
+		}
+
+		if rErr != nil {
+			if rErr == io.EOF {
+				pc.readBitBuf = 0
+				pc.readBits = 0
+			}
+			if len(pc.pendingData) &gt; 0 {
+				break
+			}
+			return 0, rErr
+		}
+
+		if len(pc.pendingData) &gt;= len(p) {
+			break
+		}
+	}
+
+	n := copy(p, pc.pendingData)
+	if n == len(pc.pendingData) {
+		pc.pendingData = pc.pendingData[:0]
+	} else {
+		pc.pendingData = pc.pendingData[n:]
+	}
+	return n, nil
+}
+</pre></details><details class="card"><summary><b>Evidence harness (loopback runner)</b> — <code>cmd/iotbci-evidence/main.go</code></summary><pre>package main
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;flag&quot;
+	&quot;fmt&quot;
+	&quot;os&quot;
+	&quot;os/exec&quot;
+	&quot;path/filepath&quot;
+	&quot;runtime&quot;
+	&quot;strconv&quot;
+	&quot;strings&quot;
+	&quot;time&quot;
+
+	&quot;github.com/BlingCc233/IoT_BCI-sudoku/internal/bench&quot;
+	&quot;github.com/BlingCc233/IoT_BCI-sudoku/pkg/iotbci&quot;
+)
+
+type evidenceReport struct {
+	GeneratedAt time.Time `json:&quot;generated_at&quot;`
+	RepoRoot    string    `json:&quot;repo_root&quot;`
+
+	CoreSourceBytes int64 `json:&quot;core_source_bytes&quot;`
+
+	Scenarios []scenarioReport `json:&quot;scenarios&quot;`
+}
+
+type scenarioReport struct {
+	Name string `json:&quot;name&quot;`
+
+	TCPPorts []uint16 `json:&quot;tcp_ports,omitempty&quot;`
+	UDPPorts []uint16 `json:&quot;udp_ports,omitempty&quot;`
+
+	Metrics bench.ProtocolResult `json:&quot;metrics&quot;`
+
+	Capture *captureReport `json:&quot;capture,omitempty&quot;`
+}
+
+type captureReport struct {
+	Enabled bool   `json:&quot;enabled&quot;`
+	Iface   string `json:&quot;iface&quot;`
+	Filter  string `json:&quot;filter&quot;`
+
+	PcapPath   string                 `json:&quot;pcap_path&quot;`
+	ReportDir  string                 `json:&quot;report_dir&quot;`
+	ReportJSON map[string]any         `json:&quot;report_json,omitempty&quot;`
+	Error      string                 `json:&quot;error,omitempty&quot;`
+	Meta       map[string]interface{} `json:&quot;meta,omitempty&quot;`
+}
+
+func main() {
+	var (
+		outDir   = flag.String(&quot;out_dir&quot;, &quot;evidence_out&quot;, &quot;output directory&quot;)
+		msgs     = flag.Int(&quot;messages&quot;, 200, &quot;messages (round trips)&quot;)
+		size     = flag.Int(&quot;size&quot;, 256, &quot;payload size (bytes)&quot;)
+		timeout  = flag.Duration(&quot;timeout&quot;, 30*time.Second, &quot;overall timeout&quot;)
+		repoRoot = flag.String(&quot;repo_root&quot;, &quot;&quot;, &quot;repo root (default: current dir)&quot;)
+		sdkPadMin = flag.Int(&quot;sudoku_padding_min&quot;, 0, &quot;sudoku padding min percentage for evidence scenarios&quot;)
+		sdkPadMax = flag.Int(&quot;sudoku_padding_max&quot;, 0, &quot;sudoku padding max percentage for evidence scenarios&quot;)
+
+		captureIface   = flag.String(&quot;capture_iface&quot;, &quot;&quot;, &quot;optional: enable pcap capture on interface (e.g. lo0/en0/eth0)&quot;)
+		captureBinPath = flag.String(&quot;capture_bin&quot;, &quot;&quot;, &quot;optional: path to pcap-enabled iotbci-capture binary (default: auto-build with -tags pcap)&quot;)
+		reportBinPath  = flag.String(&quot;report_bin&quot;, &quot;&quot;, &quot;optional: path to iotbci-report binary (default: auto-build)&quot;)
+	)
+	flag.Parse()
+
+	root := *repoRoot
+	if root == &quot;&quot; {
+		wd, err := os.Getwd()
+		if err != nil {
+			fatal(err)
+		}
+		root = wd
+	}
+	root, _ = filepath.Abs(root)
+
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	defer cancel()
+
+	if err := os.MkdirAll(*outDir, 0o755); err != nil {
+		fatal(err)
+	}
+
+	coreBytes, err := bench.CoreSourceBytes(root)
+	if err != nil {
+		fatal(err)
+	}
+
+	rep := evidenceReport{
+		GeneratedAt:     time.Now(),
+		RepoRoot:        root,
+		CoreSourceBytes: coreBytes,
+	}
+
+	captureEnabled := strings.TrimSpace(*captureIface) != &quot;&quot;
+	var (
+		captureBin string
+		reportBin  string
+	)
+	if captureEnabled {
+		captureBin = strings.TrimSpace(*captureBinPath)
+		reportBin = strings.TrimSpace(*reportBinPath)
+
+		toolsDir := filepath.Join(*outDir, &quot;.tools&quot;)
+		if err := os.MkdirAll(toolsDir, 0o755); err != nil {
+			fatal(err)
+		}
+
+		if reportBin == &quot;&quot; {
+			reportBin = filepath.Join(toolsDir, toolName(&quot;iotbci-report&quot;))
+			if err := buildTool(ctx, root, reportBin, &quot;&quot;, &quot;./cmd/iotbci-report&quot;); err != nil {
+				fatal(err)
+			}
+		}
+		if captureBin == &quot;&quot; {
+			captureBin = filepath.Join(toolsDir, toolName(&quot;iotbci-capture&quot;))
+			if err := buildTool(ctx, root, captureBin, &quot;pcap&quot;, &quot;./cmd/iotbci-capture&quot;); err != nil {
+				// libpcap missing or build failed -&gt; proceed without capture.
+				captureEnabled = false
+			}
+		}
+	}
+
+	cfg := bench.RunConfig{Messages: *msgs, PayloadSize: *size}
+
+	scenarios := []struct {
+		Name string
+		Run  func(context.Context, bench.ReadyFunc) (bench.ProtocolResult, error)
+	}{
+		{
+			Name: &quot;iotbci-sudoku-pure-tcp&quot;,
+			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
+				// Pure mode focuses on ASCII appearance; default padding is disabled unless overridden by flags.
+				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, true, *sdkPadMin, *sdkPadMax, &quot;127.0.0.1:0&quot;, ready)
+			},
+		},
+		{
+			Name: &quot;iotbci-sudoku-packed-tcp&quot;,
+			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
+				// Packed mode aims for throughput/latency; default padding is disabled unless overridden by flags.
+				return bench.RunIoTBCISudokuOnTCP(ctx, cfg, false, *sdkPadMin, *sdkPadMax, &quot;127.0.0.1:0&quot;, ready)
+			},
+		},
+		{
+			Name: &quot;pure-aead-tcp&quot;,
+			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
+				return bench.RunPureAEADOnTCP(ctx, cfg, iotbci.AEADChaCha20Poly1305, &quot;bench-psk-pure-aead&quot;, &quot;127.0.0.1:0&quot;, ready)
+			},
+		},
+		{
+			Name: &quot;dtls-ecdhe-ecdsa-aes256cbc&quot;,
+			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
+				return bench.RunDTLSCertECDHEOnUDP(ctx, cfg, &quot;127.0.0.1:0&quot;, ready)
+			},
+		},
+		{
+			Name: &quot;coap-udp&quot;,
+			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
+				return bench.RunCoAPOnUDP(ctx, cfg, &quot;127.0.0.1:0&quot;, ready)
+			},
+		},
+		{
+			Name: &quot;mqtt-3.1.1-qos0-tls&quot;,
+			Run: func(ctx context.Context, ready bench.ReadyFunc) (bench.ProtocolResult, error) {
+				return bench.RunMQTTOnTLS(ctx, cfg, &quot;127.0.0.1:0&quot;, ready)
+			},
+		},
+	}
+
+	for _, sc := range scenarios {
+		scDir := filepath.Join(*outDir, sc.Name)
+		if err := os.MkdirAll(scDir, 0o755); err != nil {
+			fatal(err)
+		}
+
+		var (
+			tcpPorts []uint16
+			udpPorts []uint16
+
+			capProc *exec.Cmd
+			cap     *captureReport
+		)
+		ready := func(tcp, udp []uint16) {
+			tcpPorts = append([]uint16(nil), tcp...)
+			udpPorts = append([]uint16(nil), udp...)
+			if !captureEnabled {
+				return
+			}
+			filter := bpfFilter(tcpPorts, udpPorts)
+			pcapPath := filepath.Join(scDir, &quot;capture.pcap&quot;)
+			cap = &amp;captureReport{
+				Enabled: true,
+				Iface:   *captureIface,
+				Filter:  filter,
+				PcapPath: func() string {
+					if rel, err := filepath.Rel(*outDir, pcapPath); err == nil {
+						return rel
+					}
+					return pcapPath
+				}(),
+				ReportDir: filepath.Join(sc.Name, &quot;pcap_report&quot;),
+			}
+
+			capProc = exec.CommandContext(ctx, captureBin,
+				&quot;-iface&quot;, *captureIface,
+				&quot;-out&quot;, pcapPath,
+				&quot;-filter&quot;, filter,
+			)
+			capProc.Stdout = os.Stdout
+			capProc.Stderr = os.Stderr
+			if err := capProc.Start(); err != nil {
+				cap.Error = err.Error()
+				capProc = nil
+				return
+			}
+			time.Sleep(150 * time.Millisecond)
+		}
+
+		res, err := sc.Run(ctx, ready)
+
+		if capProc != nil &amp;&amp; capProc.Process != nil {
+			_ = capProc.Process.Signal(os.Interrupt)
+			done := make(chan error, 1)
+			go func() { done &lt;- capProc.Wait() }()
+			select {
+			case &lt;-done:
+			case &lt;-time.After(2 * time.Second):
+				_ = capProc.Process.Kill()
+				&lt;-done
+			}
+		}
+		if cap != nil &amp;&amp; cap.Enabled &amp;&amp; cap.Error == &quot;&quot; {
+			pcapPath := filepath.Join(scDir, &quot;capture.pcap&quot;)
+			reportDir := filepath.Join(scDir, &quot;pcap_report&quot;)
+			_ = os.MkdirAll(reportDir, 0o755)
+			args := []string{
+				&quot;-in&quot;, pcapPath,
+				&quot;-out_dir&quot;, reportDir,
+			}
+			if len(tcpPorts) &gt; 0 {
+				args = append(args, &quot;-tcp_ports&quot;, joinPorts(tcpPorts))
+			}
+			if len(udpPorts) &gt; 0 {
+				args = append(args, &quot;-udp_ports&quot;, joinPorts(udpPorts))
+			}
+			cmd := exec.CommandContext(ctx, reportBin, args...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				cap.Error = fmt.Sprintf(&quot;report: %v&quot;, err)
+			} else {
+				b, err := os.ReadFile(filepath.Join(reportDir, &quot;report.json&quot;))
+				if err == nil {
+					var m map[string]any
+					if json.Unmarshal(b, &amp;m) == nil {
+						cap.ReportJSON = m
+					}
+				}
+			}
+		}
+
+		sr := scenarioReport{
+			Name:     sc.Name,
+			TCPPorts: tcpPorts,
+			UDPPorts: udpPorts,
+			Metrics:  res,
+			Capture:  cap,
+		}
+		if err != nil {
+			// Store the error in capture.error if capture is enabled; otherwise fail fast.
+			if sr.Capture != nil {
+				sr.Capture.Error = err.Error()
+			} else {
+				fatal(err)
+			}
+		}
+
+		rep.Scenarios = append(rep.Scenarios, sr)
+
+		out, _ := json.MarshalIndent(sr, &quot;&quot;, &quot;  &quot;)
+		_ = os.WriteFile(filepath.Join(scDir, &quot;metrics.json&quot;), append(out, &#x27;\n&#x27;), 0o644)
+	}
+
+	out, err := json.MarshalIndent(rep, &quot;&quot;, &quot;  &quot;)
+	if err != nil {
+		fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(*outDir, &quot;evidence.json&quot;), append(out, &#x27;\n&#x27;), 0o644); err != nil {
+		fatal(err)
+	}
+}
+
+func toolName(name string) string {
+	if runtime.GOOS == &quot;windows&quot; {
+		return name + &quot;.exe&quot;
+	}
+	return name
+}
+
+func buildTool(ctx context.Context, repoRoot, outPath, tags, pkg string) error {
+	args := []string{&quot;build&quot;, &quot;-o&quot;, outPath}
+	if strings.TrimSpace(tags) != &quot;&quot; {
+		args = append(args, &quot;-tags&quot;, tags)
+	}
+	args = append(args, pkg)
+	cmd := exec.CommandContext(ctx, &quot;go&quot;, args...)
+	cmd.Dir = repoRoot
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func joinPorts(p []uint16) string {
+	out := make([]string, 0, len(p))
+	for _, x := range p {
+		out = append(out, strconv.Itoa(int(x)))
+	}
+	return strings.Join(out, &quot;,&quot;)
+}
+
+func bpfFilter(tcpPorts, udpPorts []uint16) string {
+	var parts []string
+	for _, p := range tcpPorts {
+		parts = append(parts, fmt.Sprintf(&quot;tcp port %d&quot;, p))
+	}
+	for _, p := range udpPorts {
+		parts = append(parts, fmt.Sprintf(&quot;udp port %d&quot;, p))
+	}
+	switch len(parts) {
+	case 0:
+		return &quot;&quot;
+	case 1:
+		return parts[0]
+	default:
+		return &quot;(&quot; + strings.Join(parts, &quot; or &quot;) + &quot;)&quot;
+	}
+}
+
+func fatal(err error) {
+	_, _ = fmt.Fprintf(os.Stderr, &quot;error: %v\n&quot;, err)
+	os.Exit(1)
+}
+</pre></details><details class="card"><summary><b>Benchmark field definitions</b> — <code>internal/bench/report.go</code></summary><pre>package bench
+
+import &quot;time&quot;
+
+type RunConfig struct {
+	Messages    int
+	PayloadSize int
+}
+
+type ProtocolResult struct {
+	Name string `json:&quot;name&quot;`
+
+	Messages    int `json:&quot;messages&quot;`
+	PayloadSize int `json:&quot;payload_size&quot;`
+
+	PayloadBytesTotal int64   `json:&quot;payload_bytes_total&quot;`
+	WireBytesTotal    int64   `json:&quot;wire_bytes_total&quot;`
+	OverheadRatio     float64 `json:&quot;overhead_ratio&quot;`
+
+	AvgRTTMillis float64 `json:&quot;avg_rtt_ms&quot;`
+	P95RTTMillis float64 `json:&quot;p95_rtt_ms&quot;`
+
+	WireWriteCalls int64 `json:&quot;wire_write_calls&quot;`
+	WireReadCalls  int64 `json:&quot;wire_read_calls&quot;`
+
+	WireWriteSizeBinsLog2         [32]uint64 `json:&quot;wire_write_size_bins_log2&quot;`
+	WireWriteInterArrivalMsBinsL2 [32]uint64 `json:&quot;wire_write_interarrival_ms_bins_log2&quot;`
+	WireWriteSizeSeqSample        []uint32   `json:&quot;wire_write_size_seq_sample,omitempty&quot;`
+	WireWriteIATMsSeqSample       []uint32   `json:&quot;wire_write_interarrival_ms_seq_sample,omitempty&quot;`
+	WireActiveDurationMillis      float64    `json:&quot;wire_active_duration_ms&quot;`
+
+	WireEntropy    float64 `json:&quot;wire_entropy&quot;`
+	WireASCIIRatio float64 `json:&quot;wire_ascii_ratio&quot;`
+
+	PeakHeapAllocBytes uint64 `json:&quot;peak_heap_alloc_bytes&quot;`
+	PeakHeapInuseBytes uint64 `json:&quot;peak_heap_inuse_bytes&quot;`
+	PeakSysBytes       uint64 `json:&quot;peak_sys_bytes&quot;`
+
+	PayloadThroughputBps float64 `json:&quot;payload_throughput_bps&quot;`
+	WireThroughputBps    float64 `json:&quot;wire_throughput_bps&quot;`
+
+	DurationMillis float64 `json:&quot;duration_ms&quot;`
+}
+
+type Report struct {
+	GeneratedAt time.Time `json:&quot;generated_at&quot;`
+
+	CoreSourceBytes int64 `json:&quot;core_source_bytes&quot;`
+
+	Results []ProtocolResult `json:&quot;results&quot;`
+}
+</pre></details><details class="card"><summary><b>Benchmark methodology doc</b> — <code>doc/BENCHMARKS.md</code></summary><pre># Benchmarks &amp; Comparisons
+
+This repo ships a reproducible comparison harness that can emit:
+
+- Peak RAM usage (best-effort via `runtime.MemStats`)
+- Core library code size (source bytes)
+- Per-message processing latency (encode/decode + crypto)
+- Added byte ratio (encoding/padding/rotation overhead)
+- Appearance metrics: length distribution, timing hints, entropy, ASCII ratio
+
+Baselines:
+
+- DTLS (certificate/ECDHE)
+- MQTT over TLS
+- CoAP
+- Pure AEAD framing (no Sudoku appearance)
+
+## 快速开始（当前已实现）
+
+运行本仓库内置 bench（输出 JSON）：
+
+```bash
+go run ./cmd/iotbci-bench -messages 1000 -size 256 -timeout 30s -out bench.json
+```
+
+输出字段：
+
+- `core_source_bytes`：核心库源码体积（`pkg/iotbci` + `pkg/obfs/sudoku`，不含测试）
+- `overhead_ratio`：`wire_bytes_total / payload_bytes_total`
+- `avg_rtt_ms` / `p95_rtt_ms`：单次收发处理延迟（使用 `net.Pipe`，主要反映编码/解码/加密的 CPU 开销）
+- `wire_write_calls` / `wire_read_calls`：线上读写调用次数（外观/实现细节提示）
+- `wire_write_size_bins_log2`：写入尺寸分布（log2 bins，外观特征：长度）
+- `wire_write_interarrival_ms_bins_log2`：写入间隔分布（ms，log2 bins，外观特征：时序）
+- `wire_write_size_seq_sample` / `wire_write_interarrival_ms_seq_sample`：长度/间隔序列样本（用于协议指纹与侧写分类）
+- `wire_active_duration_ms`：首写到末写的活跃区间（ms）
+- `wire_entropy` / `wire_ascii_ratio`：对“线上 payload 字节”计算的外观指标
+- `peak_*`：峰值内存（采样近似，论文需注明采样方法与误差来源）
+- `payload_throughput_bps` / `wire_throughput_bps`：吞吐（bytes/s，按 `duration_ms` 计算）
+
+当前 bench 默认包含：
+
+- `iotbci-sudoku-pure`（纯数独：ASCII 外观优先；默认关闭 padding 以降低延迟/CPU，展示吞吐/时延上限）
+- `iotbci-sudoku-packed`（双向 6-bit packed：启用 `EnablePackedUplink`；默认关闭 padding 以展示吞吐/时延上限）
+- `pure-aead`（无数独外观层的 AEAD record，对比基线）
+- `dtls-ecdhe-ecdsa-aes256cbc`
+- `mqtt-3.1.1-qos0-tls`
+- `coap-udp`
+
+注意：`iotbci-sudoku-*` 与 `pure-aead` 的 micro-bench 默认使用 `net.Pipe`（尽量隔离内核网络栈噪声），而 DTLS/MQTT/CoAP 需要真实 UDP/TCP socket，因此会包含更多 OS 网络栈开销。论文对比建议以 `cmd/iotbci-evidence` 的“真实回环流量”数据为主，以 `cmd/iotbci-bench` 的 micro-bench 作为补充。
+
+## 论文证据集（推荐）
+
+`cmd/iotbci-evidence` 会在本机回环上运行所有协议对比场景，并可选自动调用 `cmd/iotbci-capture` + `cmd/iotbci-report` 生成每个协议的抓包报告：
+
+```bash
+go run ./cmd/iotbci-evidence -out_dir evidence_out -messages 200 -size 256 -timeout 30s
+```
+
+侧写评估可通过以下参数打开 Sudoku padding（默认 0/0）：
+
+```bash
+go run ./cmd/iotbci-evidence \
+  -out_dir evidence_out \
+  -messages 200 -size 256 -timeout 30s \
+  -sudoku_padding_min 20 -sudoku_padding_max 45
+```
+
+启用抓包（需要 libpcap + 权限）：
+
+```bash
+go run ./cmd/iotbci-evidence -out_dir evidence_out -messages 200 -size 256 -timeout 30s -capture_iface lo0
+```
+
+输出：
+
+- `evidence_out/evidence.json`（总览）
+- `evidence_out/&lt;scenario&gt;/metrics.json`
+- `evidence_out/&lt;scenario&gt;/capture.pcap`（可选）
+- `evidence_out/&lt;scenario&gt;/pcap_report/report.{json,md,html}`（可选）
+</pre></details>
+  </div>
+</body>
+</html>

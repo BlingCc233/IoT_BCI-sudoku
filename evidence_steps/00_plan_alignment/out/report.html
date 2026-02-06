@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>00 计划对齐（进度计划表 -&gt; evidence_steps 留痕）</title>
+  <style>
+:root{
+  --bg:#0b1020;
+  --card:#111827;
+  --text:#e5e7eb;
+  --muted:#9ca3af;
+  --accent:#a78bfa;
+  --ok:#10b981;
+  --bad:#ef4444;
+  --warn:#f59e0b;
+  --mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.container{max-width:1100px;margin:0 auto;padding:24px}
+h1{font-size:24px;margin:0 0 10px}
+h2{font-size:18px;margin:0 0 8px}
+.small{color:var(--muted);font-size:12px}
+.card{background:rgba(17,24,39,.96);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;margin:16px 0;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+pre,code{font-family:var(--mono)}
+pre{background:rgba(0,0,0,.35);padding:12px;border-radius:10px;overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid rgba(255,255,255,.08);padding:8px 10px;vertical-align:top}
+th{text-align:left;background:rgba(255,255,255,.05)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.12)}
+.badge.ok{color:var(--ok);border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.08)}
+.badge.fail{color:var(--bad);border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.08)}
+.badge.warn{color:var(--warn);border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.08)}
+.bytes{line-height:1.9}
+.byte{display:inline-block;font-family:var(--mono);padding:1px 6px;border-radius:6px;margin:1px 2px 1px 0;border:1px solid rgba(255,255,255,.12)}
+.byte.hint{background:rgba(167,139,250,.22);border-color:rgba(167,139,250,.45)}
+.byte.pad{background:rgba(96,165,250,.18);border-color:rgba(96,165,250,.40)}
+.byte.other{background:rgba(255,255,255,.05)}
+.sudoku-grid{border-collapse:separate;border-spacing:4px;margin:6px 0}
+.sudoku-grid td{width:32px;height:32px;text-align:center;font-family:var(--mono);font-size:13px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.10);border-radius:8px}
+.sudoku-grid td.hl{background:rgba(167,139,250,.22);border-color:rgba(167,139,250,.55)}
+svg{max-width:100%;height:auto}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="small">Generated at 2026-01-30 17:37:20</div>
+    <h1>00 计划对齐（进度计划表 -> evidence_steps 留痕）</h1><div class="card"><div class="small">此报告从 <code>tex/4.毕业设计（论文）进度计划表.pdf</code> 抽取每一行计划，并给出在仓库内的证据链接（HTML/JSON/文档/测试）。</div><table><tr><th>PDF</th><td><code>tex/4.毕业设计（论文）进度计划表.pdf</code></td></tr><tr><th>rows</th><td>12</td></tr><tr><th>rows without evidence links</th><td>2</td></tr></table><div class="small">导出文件：<code>out/plan_extracted.txt</code>（原始文本）、<code>out/plan_rows.json</code>（结构化）</div></div><div class="card"><h2>对齐表（每行计划 -> 证据链接）</h2><table><tr><th>周次</th><th>主要工作计划</th><th>预期产出（计划表）</th><th>当前证据（仓库内路径）</th></tr><tr><td><a href="rows/S7_W10-11.html"><code>S7_W10-11</code></a></td><td>确定研究问题与BCI场景；明确“基于TCP载荷obfs + 可选UoT”架构；制定轻量级约束（小内存可用性）与指标口径； 完成威胁模型初稿。</td><td>• 威胁模型用例清单 （重放/MITM）<br/>• 指标可测性检查表<br/>• 轻量级约束边界文档</td><td><code>evidence_steps/02_padding_custom_layout/out/report.html</code><br/><code>evidence_steps/03_hamming1_analysis/out/report.html</code><br/><code>evidence_steps/04_go_unit_test_logs/out/report.html</code><br/><code>doc/SECURITY.md</code></td></tr><tr><td><a href="rows/S7_W11-12.html"><code>S7_W11-12</code></a></td><td>协议总体架构设计： 定义握手/会话/记录层/外观层分层结构； 完成字段定义与状态机设计草案；确定 AEAD/Ed25519 具体选型。</td><td>• 协议状态机转换图<br/>• 报文格式规范文档<br/>• 异常路径处理流程草案</td><td><code>evidence_steps/02_padding_custom_layout/out/report.html</code><br/><code>evidence_steps/03_hamming1_analysis/out/report.html</code><br/><code>evidence_steps/04_go_unit_test_logs/out/report.html</code><br/><code>doc/STATE_MACHINE.md</code><br/><code>doc/SPEC.md</code><br/><code>doc/HANDSHAKE.md</code><br/><code>doc/FALLBACK.md</code></td></tr><tr><td><a href="rows/S7_W13-14.html"><code>S7_W13-14</code></a></td><td>核心算法验证与基础实现：1. 完成数独编码算法的离线验证与性能仿真 （重点验证288种非同构体映射的唯一性与编解码效率）；2. 实现握手与会话管理原型（Ed25519认证、密钥派生）；3. 实现基础帧化（TCP流分帧）。</td><td>• 数独映射唯一性验证报告<br/>• 握手流程单元测试日志<br/>• 分帧模块代码审查</td><td><code>evidence_steps/01_sudoku_codec_validation/out/report.html</code><br/><code>evidence_steps/04_go_unit_test_logs/out/report.html</code><br/><code>doc/HANDSHAKE.md</code></td></tr><tr><td><a href="rows/S7_W15-16.html"><code>S7_W15-16</code></a></td><td>记录层实现与论文初稿启动：1. 实现 AEAD 记录层与外观层 obfs（编码/填充/轮转）；2. 撰写论文第二、三章 （相关研究、 协议设计）草稿。</td><td>• 外观层编解码正确性测试<br/>• 端到端收发集成测试<br/>• 毕业论文草稿（第二、三章）</td><td><code>evidence_steps/01_sudoku_codec_validation/out/report.html</code><br/><code>evidence_steps/02_padding_custom_layout/out/report.html</code><br/><code>evidence_steps/03_hamming1_analysis/out/report.html</code></td></tr><tr><td><a href="rows/S7_W17-18.html"><code>S7_W17-18</code></a></td><td>高级特性与异常处理： 实现 UoT（UDP over TCP）封 装 ；实现重整封装 （小包聚合） ；完善异常处置机制与日志系统。</td><td>• UoT 封装模块单测<br/>• 模糊测试报告<br/>• 异常输入下的恢复能力记录</td><td><code>evidence_steps/04_go_unit_test_logs/out/report.html</code><br/><code>doc/FALLBACK.md</code></td></tr><tr><td><a href="rows/S7_W19-20.html"><code>S7_W19-20</code></a></td><td>工程化迭代： 优化内存占用与连接状态 （针对小内存平台）；完善回落策略与一致化错误响应；整理接口文档。</td><td>• 内存占用峰值分析报告<br/>• 回落策略触发测试<br/>• 接口文档</td><td><code>evidence_steps/04_go_unit_test_logs/out/report.html</code><br/><code>doc/FALLBACK.md</code></td></tr><tr><td><a href="rows/S8_W1-2.html"><code>S8_W1-2</code></a></td><td>原型完善与实验章节撰写：1. 完成可运行原型与自动化脚本；2. 补齐 TLS/DTLS 基线方案；3. 撰写论文第一、 四章 （绪论、实验评估）草稿。</td><td>• CI 自动化测试脚本<br/>• 基线方案复现环境<br/>• 毕业论文草稿（第一、四章）</td><td><code>evidence_steps/05_baseline_comparison/out/report.html</code><br/><code>doc/BENCHMARKS.md</code></td></tr><tr><td><a href="rows/S8_W3-4.html"><code>S8_W3-4</code></a></td><td>正式对比实验准备： 统一数据采集口径； 设计并验证抗流量分析评估流程 （包长分布/时序特征分析）。</td><td>• 三类方案 （本协议/TLS/纯AEAD）抓包文件<br/>• 抗分析评估脚本与初步图表</td><td><code>evidence_steps/05_baseline_comparison/out/report.html</code><br/><code>doc/CAPTURE.md</code><br/><code>doc/BENCHMARKS.md</code></td></tr><tr><td><a href="rows/S8_W5-6.html"><code>S8_W5-6</code></a></td><td>极端场景测试： 开展跨国网络晚高峰测试， 评估鲁棒性与性能波动； 完成全部对比实验数据收集。</td><td>• 晚高峰丢包/抖动测试数据表<br/>• 性能对比统计图 （吞吐/延迟）<br/>• 实验数据完整性复核</td><td><code>evidence_steps/05_baseline_comparison/out/report.html</code><br/><code>doc/BENCHMARKS.md</code></td></tr><tr><td><a href="rows/S8_W7-8.html"><code>S8_W7-8</code></a></td><td>论文精修与开源整理： 论文反复修改与润色 （基于已完成草稿）；整理开源仓库结构、使用说明与复现文档；准备答辩PPT。</td><td>• 毕业论文定稿<br/>• 开源代码仓库（含Readme）<br/>• 答辩PPT初稿</td><td><span class="badge warn">TODO</span></td></tr><tr><td><a href="rows/S8_W9-10.html"><code>S8_W9-10</code></a></td><td>答辩预演：针对创新点（数独编码）、威胁模型及实验局限性进行问答准备； 完善查重与归档材料。</td><td>• 模拟答辩记录<br/>• 论文查重报告<br/>• 归档材料清单</td><td><code>evidence_steps/01_sudoku_codec_validation/out/report.html</code><br/><code>evidence_steps/05_baseline_comparison/out/report.html</code><br/><code>doc/SECURITY.md</code><br/><code>doc/BENCHMARKS.md</code></td></tr><tr><td><a href="rows/S8_W11-12.html"><code>S8_W11-12</code></a></td><td>正式答辩：提交最终材料；完成学院归档要求。</td><td>• 最终版论文<br/>• 答辩演示材料  说明:  1.此表由指导教师填写，并与毕业设计任务书同时下达给学生<br/>• 2.该表作为专家组或指导教师对学生毕业设计进度检查的参考依据。</td><td><span class="badge warn">TODO</span></td></tr></table></div><div class="card"><h2>原始抽取文本（便于复制到月报/周报）</h2><pre>电 子 科 技 大 学 2022级本科毕业设计（论文）进度计划表 学院名称：计算机科学与工程学院       填表日期： 2025年11 月 1 日 学生姓名 曹福泰 论文题目 (含副标题) 面向脑机接口的物联网安全通信协议设计与验证 学    号 2022080911020 周    次 主要工作计划 （内容） 完成情况 指导教师签字 备 注 七学期10—11周 确定研究问题与BCI场景；明确“基于TCP载荷obfs + 可选UoT”架构；制定轻量级约束（小内存可用性）与指标口径； 完成威胁模型初稿。   威胁模型用例清单 （重放/MITM）；指标可测性检查表； 轻量级约束边界文档 七学期11—12周 协议总体架构设计： 定义握手/会话/记录层/外观层分层结构； 完成字段定义与状态机设计草案；确定 AEAD/Ed25519 具体选型。   协议状态机转换图； 报文格式规范文档； 异常路径处理流程草案 七学期13—14周 核心算法验证与基础实现：1. 完成数独编码算法的离线验证与性能仿真 （重点验证288种非同构体映射的唯一性与编解码效率）；2. 实现握手与会话管理原型（Ed25519认证、密钥派生）；3. 实现基础帧化（TCP流分帧）。   数独映射唯一性验证报告； 握手流程单元测试日志； 分帧模块代码审查 七学期15—16周 记录层实现与论文初稿启动：1. 实现 AEAD 记录层与外观层 obfs（编码/填充/轮转）；2. 撰写论文第二、三章 （相关研究、 协议设计）草稿。   外观层编解码正确性测试； 端到端收发集成测试；毕业论文草稿（第二、三章） 七学期17—18周 高级特性与异常处理： 实现 UoT（UDP over TCP）封 装 ；实现重整封装 （小包聚合） ；完善异常处置机制与日志系统。   UoT 封装模块单测； 模糊测试报告； 异常输入下的恢复能力记录
+
+
+七学期19—20周 工程化迭代： 优化内存占用与连接状态 （针对小内存平台）；完善回落策略与一致化错误响应；整理接口文档。   内存占用峰值分析报告；回落策略触发测试；接口文档 八学期1—2周 原型完善与实验章节撰写：1. 完成可运行原型与自动化脚本；2. 补齐 TLS/DTLS 基线方案；3. 撰写论文第一、 四章 （绪论、实验评估）草稿。   CI 自动化测试脚本； 基线方案复现环境； 毕业论文草稿（第一、四章） 八学期3—4周 正式对比实验准备： 统一数据采集口径； 设计并验证抗流量分析评估流程 （包长分布/时序特征分析）。   三类方案 （本协议/TLS/纯AEAD）抓包文件； 抗分析评估脚本与初步图表 八学期5—6周 极端场景测试： 开展跨国网络晚高峰测试， 评估鲁棒性与性能波动； 完成全部对比实验数据收集。   晚高峰丢包/抖动测试数据表； 性能对比统计图 （吞吐/延迟） ； 实验数据完整性复核 八学期7—8周 论文精修与开源整理： 论文反复修改与润色 （基于已完成草稿）；整理开源仓库结构、使用说明与复现文档；准备答辩PPT。   毕业论文定稿； 开源代码仓库（含Readme）； 答辩PPT初稿 八学期9—10周 答辩预演：针对创新点（数独编码）、威胁模型及实验局限性进行问答准备； 完善查重与归档材料。   模拟答辩记录； 论文查重报告； 归档材料清单 八学期11—12周 正式答辩：提交最终材料；完成学院归档要求。   最终版论文；答辩演示材料  说明:  1.此表由指导教师填写，并与毕业设计任务书同时下达给学生；        2.该表作为专家组或指导教师对学生毕业设计进度检查的参考依据。
+</pre></div>
+  </div>
+</body>
+</html>

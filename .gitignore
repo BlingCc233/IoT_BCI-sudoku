@@ -22,6 +22,8 @@ evidence_steps/**/out/**
 !evidence_steps/**/out/summary.json
 !evidence_steps/**/out/summary.txt
 !evidence_steps/06_fingerprint_sidechannel/out/aparecium_style_protocol_features.csv
+!evidence_steps/06_fingerprint_sidechannel/out/attack_report.json
+!evidence_steps/06_fingerprint_sidechannel/out/tls_mitm_demo.json
 
 # Go
 *.test
