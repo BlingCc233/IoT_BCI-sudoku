@@ -14,6 +14,9 @@ func Dial(ctx context.Context, addr string, cfg *ClientConfig) (net.Conn, *iotbc
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("nil client config")
 	}
+	if err := cfg.Validate(); err != nil {
+		return nil, nil, err
+	}
 	d := &net.Dialer{}
 	raw, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {

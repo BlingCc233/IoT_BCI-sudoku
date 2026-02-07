@@ -44,8 +44,8 @@ func runDTLSServer(ctx context.Context, listen string, cfg bench.RunConfig, opts
 	pc := bench.WrapPacketConn(rawPC, stats)
 	serverConn := newPacketConnConn(pc)
 	cfgDTLS := &dtls.Config{
-		Certificates: []tls.Certificate{tlsCfg.Certificates[0]},
-		CipherSuites: []dtls.CipherSuiteID{dtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+		Certificates:   []tls.Certificate{tlsCfg.Certificates[0]},
+		CipherSuites:   []dtls.CipherSuiteID{dtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
 		FlightInterval: 50 * time.Millisecond,
 		MTU:            1200,
 	}

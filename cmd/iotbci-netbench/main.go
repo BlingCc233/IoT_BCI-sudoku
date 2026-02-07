@@ -14,13 +14,13 @@ import (
 )
 
 type outputReport struct {
-	GeneratedAt time.Time          `json:"generated_at"`
-	Role        string             `json:"role"`
-	Proto       string             `json:"proto"`
-	ListenAddr  string             `json:"listen_addr,omitempty"`
-	ServerAddr  string             `json:"server_addr,omitempty"`
+	GeneratedAt time.Time            `json:"generated_at"`
+	Role        string               `json:"role"`
+	Proto       string               `json:"proto"`
+	ListenAddr  string               `json:"listen_addr,omitempty"`
+	ServerAddr  string               `json:"server_addr,omitempty"`
 	Result      bench.ProtocolResult `json:"result"`
-	Error       string             `json:"error,omitempty"`
+	Error       string               `json:"error,omitempty"`
 }
 
 type commonOpts struct {

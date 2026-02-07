@@ -21,4 +21,3 @@ func rttWarmupCount(messages int) int {
 	}
 	return w
 }
-

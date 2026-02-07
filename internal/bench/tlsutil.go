@@ -124,4 +124,3 @@ func randomSerial() *big.Int {
 	}
 	return n
 }
-
