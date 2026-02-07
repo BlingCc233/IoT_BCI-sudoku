@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/BlingCc233/IoT_BCI-sudoku/internal/node"
@@ -49,7 +48,7 @@ func main() {
 func signalContext(parent context.Context) (context.Context, func()) {
 	ctx, cancel := context.WithCancel(parent)
 	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(ch, os.Interrupt)
 	go func() {
 		select {
 		case <-ch:

@@ -2,8 +2,6 @@ package sudoku
 
 import (
 	"fmt"
-	"syscall"
-	"unsafe"
 )
 
 func (t *Table) buildDecodeLUT24(keys map[uint32]byte) error {
@@ -12,18 +10,11 @@ func (t *Table) buildDecodeLUT24(keys map[uint32]byte) error {
 	}
 
 	const lutSize = 1 << 24 // 4*6-bit index space
-	raw, err := syscall.Mmap(
-		-1,
-		0,
-		lutSize*2,
-		syscall.PROT_READ|syscall.PROT_WRITE,
-		syscall.MAP_ANON|syscall.MAP_PRIVATE,
-	)
+	u16, err := makeLUT24Buffer(lutSize)
 	if err != nil {
 		// Fall back to open addressing on platforms where mmap isn't available.
 		return nil
 	}
-	u16 := unsafe.Slice((*uint16)(unsafe.Pointer(&raw[0])), lutSize)
 
 	for k, v := range keys {
 		b0 := byte(k >> 24)
@@ -45,7 +36,8 @@ func (t *Table) buildDecodeLUT24(keys map[uint32]byte) error {
 	}
 
 	// Make it read-only after initialization to reduce accidental writes.
-	_ = syscall.Mprotect(raw, syscall.PROT_READ)
+	// Make it read-only after initialization to reduce accidental writes.
+	_ = protectLUT24Buffer(u16)
 	t.decodeLUT24 = u16
 	return nil
 }

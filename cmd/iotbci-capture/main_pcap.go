@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/google/gopacket"
@@ -56,7 +55,7 @@ func main() {
 	src := gopacket.NewPacketSource(handle, handle.LinkType())
 
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(sig, os.Interrupt)
 	var timer <-chan time.Time
 	if *dur > 0 {
 		timer = time.After(*dur)

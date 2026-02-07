@@ -56,3 +56,6 @@ tex/*.pdf
 
 # TikZ source folder: ignore compiled outputs
 tex/pic_src/*.pdf
+
+# Thesis invisibility rule (added for public release)
+tex/
