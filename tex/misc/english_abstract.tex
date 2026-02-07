@@ -1,0 +1,11 @@
+\begin{englishabstract}
+Brain-computer interface (BCI) IoT links carry highly sensitive neural data and control commands, and are exposed to replay, tampering, man-in-the-middle (MITM), and traffic-fingerprinting attacks. While TLS/DTLS-, MQTT/TLS-, and CoAP/DTLS-based deployments are cryptographically mature, constrained devices and restricted public networks still face engineering trade-offs among resource cost, reachability, and traffic observability. This thesis investigates the IoT\_BCI-Sudoku protocol implemented in this repository and evaluates a combined design consisting of authenticated handshake, AEAD record protection, and Sudoku-based traffic appearance control.
+
+The protocol is implemented as an enhancement layer between the application and TCP. The handshake integrates certificate-based authentication, ephemeral key agreement, transcript binding, and confirmation MAC; the session layer adopts AEAD records; the outer appearance layer provides reversible byte mapping, randomized padding, an ASCII mode, and customizable templates. For reproducibility, the evaluation pipeline includes local baseline benchmarking, fingerprinting and active-attack validation, and cross-region restricted-network experiments, with field-level traceability from figures and tables to raw evidence files.
+
+The evaluation shows that the proposed scheme maintains latency at the same practical level as mainstream secure protocols under restricted-network conditions, while exhibiting lower data-plane memory usage. In security validation, replay and tampering inputs are consistently rejected. In side-channel evaluation, padding and appearance control reduce class recoverability from length-sequence features. The comparison further indicates complementary engineering trade-offs between Sudoku-pure (obfuscation-oriented) and Sudoku-packed (bandwidth-oriented).
+
+This thesis contributes a closed loop from mathematical modeling to implementation and evidence-backed validation, and explicitly reports both strengths and limitations against mainstream baselines. The results provide a practical reference for protocol selection and future standardization in secure BCI-IoT communication.
+
+\englishkeyword{BCI, IoT, secure communication, traffic fingerprinting, anti-replay, protocol benchmarking, Sudoku}
+\end{englishabstract}

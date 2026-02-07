@@ -1,0 +1,517 @@
+\chapter{实验设计与结果分析}
+
+\section{实验目标与判定规则}
+本章对应 RQ1--RQ4，目标是在统一实验条件下验证 Sudoku 协议在性能、资源、安全与抗侧写四方面的可行性。判定重点如下：
+\begin{itemize}
+  \item 在跨国受限网络中，RTT 与 DTLS、MQTT/TLS 处于同量级；
+  \item 数据面内存指标低于 DTLS 与 MQTT/TLS；
+  \item 允许以较高线长开销换取外观混淆与抗侧写能力；
+  \item 主动攻击场景下应进入拒绝路径。
+\end{itemize}
+
+记方案 $s\in\{\mathrm{pure},\mathrm{packed}\}$，定义守卫函数
+\[
+\begin{aligned}
+G_{\mathrm{RTT}}^{(s)} &= \mathbf{1}\!\left(\mathrm{RTT}_s \le \mathrm{RTT}_{\mathrm{DTLS}}\right)\cdot
+\mathbf{1}\!\left(\mathrm{RTT}_s \le \mathrm{RTT}_{\mathrm{MQTT}}\right),\\
+G_{\mathrm{MEM}}^{(s)} &= \mathbf{1}\!\left(\mathrm{MEM}_s < \mathrm{MEM}_{\mathrm{DTLS}}\right)\cdot
+\mathbf{1}\!\left(\mathrm{MEM}_s < \mathrm{MEM}_{\mathrm{MQTT}}\right).
+\end{aligned}
+\]
+其中 $\mathrm{MEM}$ 取数据面增量内存指标。该判定方式与 IoT 协议对照研究中的同负载、同实现、同统计原则一致\cite{restuccia2020lowpower,gallenmueller2019dtls}。
+
+\section{对照环境与实验负载}
+本文采用三组实验，除网络路径与任务目的外，其余测量定义保持一致。
+
+\begin{table}[H]
+\centering
+\scriptsize
+\caption{实验环境与负载设置}
+\label{tab:c4-env}
+\begin{tabular}{p{2.2cm}p{4.3cm}p{3.5cm}p{3.3cm}}
+\toprule
+实验组 & 网络条件与节点 & 负载参数 & 主要用途 \\
+\midrule
+本地基线组 & 单机回环，低噪声路径 & 重复 3 轮，5000 消息，256B 负载 & 获取协议基础性能轮廓 \\
+\midrule
+侧写与攻防组 & 单机受控环境 & 协议侧写 5 轮；BCI 每类 3 轮；消息 180--800 条 & 验证侧写恢复、DPI 与主动攻击 \\
+\midrule
+跨国受限组 & 本机客户端 + 加拿大区域公网云主机（匿名化） & 重复 3 轮，20 消息，128B 负载 & 验证真实公网可部署性 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+跨国实验中，Sudoku、Pure-AEAD、MQTT/TLS 采用 TCP 直连；CoAP 与 DTLS 因公网 UDP 受限，采用 UDP-over-TCP 中继（UoT）完成链路连通。该配置用于在统一可达性约束下保持基线可比较性\cite{rfc8085,rfc4787,li2011nat,ren2020coapcongestion}。
+
+\section{指标计算方法与算法实现}
+\subsection{性能与开销指标}
+基准程序在每轮测试中记录逐消息 RTT 序列 $\{r_i\}_{i=1}^{N}$，并按下式计算
+\[
+\mathrm{RTT}_{\mathrm{avg}}=\frac{1}{N}\sum_{i=1}^{N}r_i,
+\qquad
+\mathrm{RTT}_{p95}=\mathrm{Sort}(r)_{\lfloor 0.95\,(N-1)\rfloor}.
+\]
+
+设单轮配置为消息数 $M$、负载长度 $L$，回显模型下有效负载总字节数为
+\[
+B_{\mathrm{payload}}=2ML.
+\]
+若采集到线上总字节数 $B_{\mathrm{wire}}$，则开销比定义为
+\[
+\mathrm{Overhead}=\frac{B_{\mathrm{wire}}}{B_{\mathrm{payload}}}.
+\]
+吞吐量定义为
+\[
+T_{\mathrm{payload}}=\frac{B_{\mathrm{payload}}}{\Delta t},
+\qquad
+T_{\mathrm{wire}}=\frac{B_{\mathrm{wire}}}{\Delta t}.
+\]
+上述量在实现中由 netbench 统计模块统一计算：先进行时延聚合与分位数统计，再完成字节计数、开销比与吞吐量的统一归并。
+
+\subsection{外观统计指标}
+对写出字节频数 $\{f_b\}_{b=0}^{255}$，总字节数 $F=\sum_b f_b$，定义
+\[
+H=-\sum_{b:f_b>0}\frac{f_b}{F}\log_2\frac{f_b}{F},
+\qquad
+R_{\mathrm{ascii}}=\frac{\sum_{b=0x20}^{0x7E}f_b}{F}.
+\]
+其中 $H$ 表示字节熵，$R_{\mathrm{ascii}}$ 表示可打印比例。实现中由 \texttt{ComputeByteStats} 计算。为支持序列侧写评估，系统额外记录前 1024 次写调用的长度序列与相邻到达间隔序列。
+
+\subsection{内存指标}
+内存监测采用周期采样峰值法。设阶段开始时基线内存为 $m_0$，阶段内观测峰值为 $m_{\max}$，定义数据面增量指标
+\[
+\Delta m=\max(m_{\max}-m_0,0).
+\]
+本文报告绝对峰值与增量峰值两类指标；守卫判定采用 $\Delta m$（阶段基线扣除后的堆分配增量），以削弱运行时基线差异对跨轮比较的干扰。实现上采用周期采样峰值与基线差分流程完成统计。
+
+\subsection{侧写分类与攻击判定算法}
+协议侧写采用特征提取与留一法最近质心分类。对样本 $x_i$，预测规则为
+\[
+\hat{y}_i=\arg\min_{c}\|x_i-\mu_c^{(-i)}\|_2^2,
+\]
+其中 $\mu_c^{(-i)}$ 为去除样本 $i$ 后类别 $c$ 的质心。特征由开销比、字节熵、可打印比例、读写调用统计、长度序列分块均值、间隔序列分块均值组成。
+
+BCI 类别恢复实验采用更强的攻击者约束：攻击者仅观察长度序列，不使用协议内部字段。每个样本固定截断为 128 维长度窗口，再提取均值、标准差、最大值、最小值与分块均值后执行同一分类器。
+
+主动攻击判定采用确定性谓词：
+\begin{itemize}
+  \item 重放攻击成功拦截：服务端错误类型为重放检测命中；
+  \item 篡改攻击成功拦截：服务端错误类型属于可疑流量、认证失败或协议违规；
+  \item 资源探测成功拦截：超长握手探测触发可疑流量错误；
+  \item TLS MITM 可恢复性：攻击者记录的类别序列与发送序列逐项比较，恢复率按
+\[
+\mathrm{RecoverRate}=\frac{1}{N}\sum_{i=1}^{N}\mathbf{1}(s_i=\hat{s}_i)
+\]
+计算，当恢复率接近 1 时表示业务语义可被完整重建。
+\end{itemize}
+
+\subsection{指标计算伪代码}
+为确保指标定义、实现流程与证据字段一致，本文将第 4 章核心统计流程形式化为伪代码。
+
+\begin{algorithm}[H]
+\small
+\caption{统一指标归并流程（单协议单轮）}
+\label{alg:c4-metric-pipeline}
+\KwIn{消息数 $M$，负载长度 $L$，RTT 序列 $\{r_i\}$，线上统计 $S$，内存基线 $m_0$，阶段峰值 $m_{\max}$}
+\KwOut{协议指标记录 $R$}
+$B_{\mathrm{payload}} \leftarrow 2ML$\;
+$B_{\mathrm{wire}} \leftarrow S.\mathrm{bytesWritten}+S.\mathrm{bytesRead}$\;
+$R.\mathrm{avg\_rtt} \leftarrow \mathrm{mean}(\{r_i\})$\;
+$R.\mathrm{p95\_rtt} \leftarrow \mathrm{percentile}(\{r_i\},0.95)$\;
+$R.\mathrm{overhead} \leftarrow B_{\mathrm{wire}}/B_{\mathrm{payload}}$\;
+$(R.\mathrm{entropy},R.\mathrm{ascii}) \leftarrow \mathrm{ComputeByteStats}(S.\mathrm{byteFreq})$\;
+$(R.\mathrm{seq\_size},R.\mathrm{seq\_iat}) \leftarrow \mathrm{SnapshotSequence}(S)$\;
+$\Delta m \leftarrow \max(m_{\max}-m_0,0)$\;
+写入 $R.\mathrm{phase\_delta\_heap\_inuse}$ 等内存增量字段并返回 $R$\;
+\end{algorithm}
+
+\begin{algorithm}[H]
+\small
+\caption{留一法最近质心侧写分类}
+\label{alg:c4-loo-centroid}
+\KwIn{标注样本集合 $\mathcal{D}=\{(x_i,y_i)\}_{i=1}^{N}$}
+\KwOut{混淆矩阵 $C$ 与准确率 $A$}
+$ok \leftarrow 0$，初始化混淆矩阵 $C$\;
+\For{$i \leftarrow 1$ \KwTo $N$}{
+  $\mathcal{T} \leftarrow \mathcal{D}\setminus\{(x_i,y_i)\}$\;
+  \ForEach{类别 $c$}{
+    $\mu_c \leftarrow \mathrm{mean}\left(\{x \mid (x,y)\in\mathcal{T}, y=c\}\right)$\;
+  }
+  $\hat{y}_i \leftarrow \arg\min_c \|x_i-\mu_c\|_2^2$\;
+  更新 $C[y_i,\hat{y}_i]$\;
+  \If{$\hat{y}_i=y_i$}{$ok \leftarrow ok+1$}
+}
+$A \leftarrow ok/N$，输出 $(C,A)$\;
+\end{algorithm}
+
+\begin{algorithm}[H]
+\small
+\caption{主动攻击判定与 MITM 恢复率计算}
+\label{alg:c4-attack-judge}
+\KwIn{攻击事件日志 $\mathcal{E}$，发送类别序列 $S=\{s_i\}$，攻击侧观测序列 $\hat{S}=\{\hat{s}_i\}$}
+\KwOut{攻击判定结果与恢复率}
+\ForEach{$e \in \mathcal{E}$}{
+  \If{$e.\mathrm{error}=\texttt{ErrReplayDetected}$}{判定重放拦截成功\;}
+  \If{$e.\mathrm{error}\in\{\texttt{SuspiciousError},\texttt{ErrAuthFailed},\texttt{ErrProtocolViolation}\}$}{
+    判定篡改或探测拦截成功\;
+  }
+}
+$N \leftarrow \min(|S|,|\hat{S}|)$，$ok \leftarrow \sum_{i=1}^{N}\mathbf{1}(s_i=\hat{s}_i)$\;
+$\mathrm{RecoverRate} \leftarrow ok/|S|$\;
+\If{$\mathrm{RecoverRate}\approx 1$}{判定业务类别可恢复}
+\end{algorithm}
+\FloatBarrier
+
+\subsection{代码实现与证据来源映射}
+表 \ref{tab:c4-source-map} 给出第 4 章关键结论对应的算法调用、实现位置与证据字段映射，确保每个图表可追溯至仓库实现与输出文件。
+
+\begin{table}[H]
+\centering
+\footnotesize
+\caption{第 4 章关键结论的代码与证据映射}
+\label{tab:c4-source-map}
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}p{3.1cm}>{\raggedright\arraybackslash}p{3.4cm}}
+\toprule
+结论对象 & 核心调用/算法 & 实现位置 & 证据字段来源 \\
+\midrule
+RTT、P95、开销、吞吐 &
+时延聚合与分位统计 &
+netbench/metrics.go；bench/util.go &
+Step05/Step07 指标文件：平均 RTT、P95 RTT、开销比 \\
+\midrule
+外观统计与序列特征 &
+写字节频数、序列汇总、字节统计 &
+bench/wire*.go；bench/stats.go &
+字节熵、可打印比例、长度序列与间隔序列字段 \\
+\midrule
+内存增量指标 &
+内存采样与基线差分 &
+bench/mem.go；netbench/metrics.go &
+阶段增量内存与峰值内存字段 \\
+\midrule
+协议识别与类别恢复 &
+最近质心留一分类（算法 \ref{alg:c4-loo-centroid}） &
+Step06 侧写脚本（run.py） &
+Step06：summary.json 与混淆矩阵可视化结果 \\
+\midrule
+TLS MITM 恢复率 &
+恢复率计算函数（算法 \ref{alg:c4-attack-judge}） &
+cmd/iotbci-tls-mitm-demo/main.go &
+Step06：tls\_mitm\_demo.json（恢复率字段） \\
+\midrule
+异常回落场景 &
+HandleSuspicious &
+node/fallback.go &
+Step06 攻防输出与表 \ref{tab:c4-fallback-sim} 仿真记录 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{实验调用规范}
+为保证统计定义一致，本文在证据生成阶段统一采用表 \ref{tab:c4-repro-entry} 所列调用入口与参数配置。
+
+\begin{table}[H]
+\centering
+\footnotesize
+\caption{第 4 章结果的复现实验入口}
+\label{tab:c4-repro-entry}
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{2.7cm}>{\raggedright\arraybackslash}p{2.7cm}>{\raggedright\arraybackslash}p{4.0cm}}
+\toprule
+实验目标 & 调用入口 & 关键参数 & 主要输出 \\
+\midrule
+本地基线对照 &
+cmd/iotbci-evidence &
+消息数、负载长度、超时参数 &
+evidence.json；各协议 metrics.json \\
+\midrule
+侧写与主动攻击 &
+Step06 侧写脚本 + cmd/iotbci-attack &
+样本轮次、BCI 类别构造、填充区间 &
+summary.json；attack\_report.json \\
+\midrule
+TLS MITM 对照 &
+cmd/iotbci-tls-mitm-demo &
+消息数与超时参数 &
+tls\_mitm\_demo.json（恢复率字段） \\
+\midrule
+跨国受限网络对照 &
+Step07 跨国脚本 + cmd/iotbci-netbench &
+境外节点参数（匿名化）、端口映射、重复轮次 &
+跨国 summary.json 与协议明细结果 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{统一评估条件下的性能对照结果}
+\subsection{本地回环结果}
+本地中位数见表~\ref{tab:c4-local-baseline}。在低噪声环境下，Sudoku-pure 与 Sudoku-packed 的 RTT 和峰值内存均低于 DTLS 与 MQTT/TLS。与 Pure-AEAD、CoAP 相比，Sudoku 的优势不在绝对时延，而在握手安全与外观调控能力并存前提下保持可接受性能。
+
+\begin{table}[H]
+\centering
+\small
+\caption{本地回环中位数}
+\label{tab:c4-local-baseline}
+\begin{tabular}{lrrr}
+\toprule
+协议 & 平均 RTT(ms) & 峰值堆内存(B) & 开销比 \\
+\midrule
+Sudoku-pure & 0.027 & 1589248 & 2.86 \\
+Sudoku-packed & 0.027 & 835584 & 1.44 \\
+Pure-AEAD & 0.025 & 901120 & 1.07 \\
+CoAP/UDP & 0.023 & 2269184 & 1.04 \\
+DTLS & 0.060 & 4456448 & 1.24 \\
+MQTT/TLS & 0.114 & 4087808 & 2.80 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{跨国受限网络结果}
+跨国中位数见表~\ref{tab:c4-cross-region-main}。Sudoku-pure 与 Sudoku-packed 的 RTT 为 108.676ms 和 105.536ms，与 DTLS（109.040ms）和 Pure-AEAD（106.654ms）同量级，且显著低于 MQTT/TLS（150.072ms）。在峰值堆内存指标上，Sudoku 两条路径分别为 1.5MB 与 0.8MB，显著低于 DTLS（4.2MB）与 MQTT/TLS（3.9MB）。
+
+\begin{table}[H]
+\centering
+\small
+\caption{跨国受限网络中位数}
+\label{tab:c4-cross-region-main}
+\begin{tabular}{lrrrrl}
+\toprule
+协议 & 平均 RTT(ms) & 峰值堆内存(B) & 开销比 & 传输路径 \\
+\midrule
+Sudoku-pure & 108.676 & 1589248 & 5.1813 & TCP 直连 \\
+Sudoku-packed & 105.536 & 835584 & 1.7389 & TCP 直连 \\
+Pure-AEAD & 106.654 & 901120 & 1.1406 & TCP 直连 \\
+DTLS & 109.040 & 4456448 & 2.3279 & UoT 中继 \\
+CoAP & 112.805 & 2269184 & 1.0859 & UoT 中继 \\
+MQTT/TLS & 150.072 & 4087808 & 2.4949 & TCP 直连 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  bar width=8pt,
+  width=0.92\linewidth,
+  height=4.8cm,
+  ymin=0,
+  ylabel={avg RTT (ms)},
+  symbolic x coords={SP,SK,AEAD,DTLS,CoAP,MQTT},
+  xtick=data,
+  xticklabel style={font=\scriptsize},
+  nodes near coords,
+  every node near coord/.append style={font=\scriptsize},
+  enlarge x limits=0.08,
+  grid=major
+]
+\addplot coordinates {(SP,108.676) (SK,105.536) (AEAD,106.654) (DTLS,109.040) (CoAP,112.805) (MQTT,150.072)};
+\end{axis}
+\end{tikzpicture}
+
+\vspace{2mm}
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  bar width=8pt,
+  width=0.92\linewidth,
+  height=4.8cm,
+  ymin=0,
+  ylabel={Mem Metric (KiB)},
+  symbolic x coords={SP,SK,AEAD,DTLS,CoAP,MQTT},
+  xtick=data,
+  xticklabel style={font=\scriptsize},
+  nodes near coords,
+  every node near coord/.append style={font=\scriptsize},
+  enlarge x limits=0.08,
+  grid=major
+]
+\addplot coordinates {(SP,2.648) (SK,2.867) (AEAD,16.313) (DTLS,181.125) (CoAP,82.992) (MQTT,95.391)};
+\end{axis}
+\end{tikzpicture}
+\caption{跨国对照关键指标（SP: Sudoku-pure, SK: Sudoku-packed）}
+\label{fig:c4-cross-core}
+\end{figure}
+
+\subsection{相对增益量化}
+表~\ref{tab:c4-relative-gain} 给出 Sudoku 相对 DTLS 与 MQTT/TLS 的增益。结果显示：Sudoku 相对 DTLS 的 RTT 优势有限（0.33\% 与 3.21\%），但内存增益均超过 96\%；相对 MQTT/TLS 则在 RTT 与内存两项均具有稳定优势。
+
+\begin{table}[H]
+\centering
+\small
+\caption{Sudoku 相对增益（跨国中位数）}
+\label{tab:c4-relative-gain}
+\begin{tabular}{lrrrr}
+\toprule
+方案 & RTT 相对 DTLS & RTT 相对 MQTT & 内存相对 DTLS & 内存相对 MQTT \\
+\midrule
+Sudoku-pure & +0.33\% & +27.58\% & +98.54\% & +97.22\% \\
+Sudoku-packed & +3.21\% & +29.68\% & +98.42\% & +96.99\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{开销与时延权衡}
+图~\ref{fig:c4-overhead-rtt-tradeoff} 展示开销比与平均 RTT 的平面分布。Sudoku-pure 位于高开销、同量级时延区域；Sudoku-packed 向低开销方向移动，同时保持 RTT 不劣于 DTLS，体现了两种模式在外观混淆强度与带宽效率之间的不同取舍。
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tikzpicture}
+\begin{axis}[
+  width=0.90\linewidth,
+  height=6.0cm,
+  xlabel={overhead ratio},
+  ylabel={avg RTT (ms)},
+  xmin=0.9, xmax=5.4,
+  ymin=100, ymax=155,
+  grid=major,
+  legend style={at={(0.02,0.98)},anchor=north west,font=\scriptsize}
+]
+\addplot[only marks, mark=*, mark size=2.7pt] coordinates {(5.1813,108.676)};
+\addlegendentry{Sudoku-pure}
+\addplot[only marks, mark=square*, mark size=2.6pt] coordinates {(1.7389,105.536)};
+\addlegendentry{Sudoku-packed}
+\addplot[only marks, mark=triangle*, mark size=2.8pt] coordinates {(1.1406,106.654)};
+\addlegendentry{Pure-AEAD}
+\addplot[only marks, mark=diamond*, mark size=2.8pt] coordinates {(2.3279,109.040)};
+\addlegendentry{DTLS}
+\addplot[only marks, mark=o, mark size=2.6pt] coordinates {(1.0859,112.805)};
+\addlegendentry{CoAP(UoT)}
+\addplot[only marks, mark=star, mark size=3.0pt] coordinates {(2.4949,150.072)};
+\addlegendentry{MQTT/TLS}
+\end{axis}
+\end{tikzpicture}
+\caption{跨国对照中的开销-时延权衡散点}
+\label{fig:c4-overhead-rtt-tradeoff}
+\end{figure}
+
+\section{协议识别、类别恢复与主动攻击验证}
+\subsection{被动侧写实验设置}
+协议识别实验使用 5 轮采样，每轮 800 条消息、256B 负载、无填充。BCI 类别恢复实验构造四类负载（MI-left:80B、MI-right:82B、Blink:84B、Rest:86B），每类重复 3 轮；比较三种模式：TLS 基线、Sudoku 无填充、Sudoku 填充（20--45B 随机填充）。
+
+DPI 对照实验中，Sudoku-ASCII 样本由提示字节池与填充字节池按概率混合生成（提示概率 0.82），并与随机二进制样本比较可打印比例和规则分类标签。
+
+\subsection{被动侧写结果}
+侧写结果表明：协议识别准确率为 96.67\%（29/30），唯一误判来自 Sudoku-pure 与 Sudoku-packed 的一次互混；BCI 类别恢复率在 TLS 基线与 Sudoku 无填充模式下均为 1.0000，而在 Sudoku 填充模式下降至 0.1667，说明填充机制可显著削弱长度序列侧写的可学习性\cite{velan2015survey,pan2016encryptedtrafficcn,hou2024encmalware}。
+
+在 DPI 规则判别中，Sudoku-ASCII 的可打印比例为 0.9834，被归为明文样式；TLS 二进制样本可打印比例为 0.3838，被归为密文二进制样式。该结果说明 ASCII 外观模式能够改变基于规则的流量标签，增加攻击者初始语义判断难度。
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  bar width=11pt,
+  width=0.88\linewidth,
+  height=4.8cm,
+  ymin=0, ymax=1.05,
+  ylabel={恢复率/比例},
+  symbolic x coords={TLS基线,Sudoku无填充,Sudoku有填充},
+  xtick=data,
+  xticklabel style={font=\scriptsize},
+  nodes near coords,
+  every node near coord/.append style={font=\scriptsize},
+  enlarge x limits=0.18,
+  grid=major
+]
+\addplot coordinates {(TLS基线,1.0) (Sudoku无填充,1.0) (Sudoku有填充,0.1667)};
+\end{axis}
+\end{tikzpicture}
+
+\vspace{2mm}
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  bar width=16pt,
+  width=0.88\linewidth,
+  height=4.8cm,
+  ymin=0, ymax=1.05,
+  ylabel={可打印比例},
+  symbolic x coords={Sudoku-ASCII,TLS二进制},
+  xtick=data,
+  xticklabel style={font=\scriptsize},
+  nodes near coords,
+  every node near coord/.append style={font=\scriptsize},
+  enlarge x limits=0.30,
+  grid=major
+]
+\addplot coordinates {(Sudoku-ASCII,0.9834) (TLS二进制,0.3838)};
+\end{axis}
+\end{tikzpicture}
+\caption{侧写恢复率与 DPI 可打印比例对照}
+\label{fig:c4-sidechannel-dpi}
+\end{figure}
+
+\subsection{主动攻击与 MITM 可恢复性验证}
+表~\ref{tab:c4-security-evidence} 给出攻击建模、判定规则与结果。Sudoku 在重放、篡改、资源探测三类主动攻击下均触发拒绝路径；TLS MITM 对照的恢复率为 1.0，说明攻击者可逐条恢复业务类别序列，链路加密并不必然等价于业务语义不可见\cite{wilkens2021passivetls}。
+
+\begin{table}[H]
+\centering
+\small
+\caption{主动攻击与 MITM 对照结果}
+\label{tab:c4-security-evidence}
+\begin{tabular}{p{2.8cm}p{4.8cm}p{3.5cm}}
+\toprule
+场景 & 判定规则 & 结果 \\
+\midrule
+重放攻击 & 服务端错误类型命中重放检测谓词 & 成功拦截 \\
+篡改攻击 & 服务端错误类型命中可疑流量/认证失败/协议违规谓词 & 成功拦截 \\
+资源探测 & 超长握手探测触发可疑流量错误 & 成功拦截 \\
+TLS MITM 对照 & 记录序列与发送序列逐项比较，恢复率接近 1 判定可恢复 & 恢复率 1.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Fallback 适用场景仿真}
+为验证 fallback 的工程可用性，本文构造主动探测流量重定向场景：攻击侧先发送可疑握手前缀，再继续发送后续探测字节；服务端在握手阶段识别为可疑流量后，不进入真实会话，而是将已读前缀与后续字节转发至诱饵服务。仿真流程与结果见表 \ref{tab:c4-fallback-sim}。
+
+\begin{table}[H]
+\centering
+\small
+\caption{fallback 场景仿真过程与结果}
+\label{tab:c4-fallback-sim}
+\begin{tabular}{p{2.0cm}p{4.1cm}p{4.0cm}p{2.8cm}}
+\toprule
+阶段 & 输入或动作 & 观测结果 & 结论 \\
+\midrule
+S1 可疑触发 & 发送异常握手前缀 ``BAD'' & 服务端返回可疑错误并进入 fallback 路径 & 真实会话未建立 \\
+\midrule
+S2 连续转发 & 攻击侧继续发送 ``HELLO'' & 诱饵端收到连续字节 ``BADHELLO'' & 已读字节未丢失 \\
+\midrule
+S3 诱饵响应 & 诱饵端返回 ``ACK'' & 攻击侧收到 ``ACK'' 响应 & 外部行为与普通服务一致 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+该场景表明，fallback 机制的作用是降低异常路径的可区分性，而非增强密码学强度：探测流量仅获得诱饵通道反馈，不返回真实协议状态。作为对照，TLS/DTLS、MQTT/TLS 与 CoAP/DTLS 基线路径在标准实现中通常表现为告警、断链或超时，不提供协议级已读字节回落接口（详见表 \ref{tab:c3-fallback-compare}）\cite{rfc8446,rfc9147,mqtt311,rfc7252}。
+
+\section{基线风险归因与 Sudoku 的工程权衡}
+结合协议机理与实证结果，可归纳如下。
+\begin{itemize}
+  \item \textbf{CoAP（UDP）}：协议语义建立在 UDP 之上\cite{rfc7252}，但在跨国受限链路中需通过 UoT 中继，原生 UDP 部署优势难以直接发挥。
+  \item \textbf{DTLS}：具备标准化握手与会话保护\cite{rfc9147}，但在受限公网常依赖中继与代理，运维信任边界扩大。
+  \item \textbf{MQTT/TLS}：生态成熟、工程复用高\cite{mqtt311,rfc8446,zheng2023mqtttamarin,qi2022mqttintegrity}，但长度与时序特征仍可被侧写模型稳定利用\cite{velan2015survey,pan2016encryptedtrafficcn,hou2024encmalware}。
+  \item \textbf{Pure-AEAD}：记录层机密性与完整性明确\cite{rfc5116}，但缺乏独立握手认证与新鲜性语义，抗重放能力依赖额外状态机。
+  \item \textbf{Sudoku}：通过握手防护、外观调控与资源控制实现联合优化；pure 偏重混淆能力，packed 偏重带宽效率。
+\end{itemize}
+
+因此，Sudoku 在 BCI-IoT 场景下体现为工程折中路线：相较 Pure-AEAD，安全语义更完整；相较 MQTT/DTLS，内存占用更低且外观对抗能力更强；代价是 pure 路径开销较高、标准化生态仍需扩展。
+
+\section{有效性威胁与结果边界}
+本文结果在下列边界条件内成立。
+\begin{itemize}
+  \item \textbf{外部有效性}：跨国实验基于单个公网节点，未覆盖全部地区与运营商网络。
+  \item \textbf{统计有效性}：跨国重复次数为 3，适合趋势判断，不用于细粒度显著性检验。
+  \item \textbf{模型有效性}：侧写模型以特征工程为主，未覆盖大规模深度时序模型上界。
+  \item \textbf{实现有效性}：结论对应本仓库实现，外推至其他实现需重新复核。
+\end{itemize}
+
+\section{本章小结}
+本章建立了实验设计、指标算法、攻击判定与结果解释的一致性链路。结果显示：在跨国受限网络中，Sudoku 的 RTT 与主流协议处于同量级，数据面内存显著低于 DTLS 与 MQTT/TLS；在安全与对抗方面，Sudoku 可稳定拦截重放与篡改，填充机制可显著降低类别侧写恢复率。综合来看，Sudoku 具备可量化、可复核、可部署的工程可行性。

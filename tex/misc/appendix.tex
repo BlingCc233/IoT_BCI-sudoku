@@ -1,0 +1,113 @@
+\thesisappendix
+
+\chapter{复现说明与证据索引}
+
+\section{结论到证据文件映射}
+为保证可复核性，正文关键结论与证据文件映射见表~\ref{tab:app-evidence-index}。
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{正文结论与证据文件映射}
+\label{tab:app-evidence-index}
+\begin{tabular}{p{1.0cm}p{2.0cm}p{4.7cm}p{3.7cm}}
+\toprule
+索引 & 结论类型 & 证据文件 & 关键字段 \\
+\midrule
+E1 & 本地基线性能 &
+\path{evidence_steps/05_baseline_comparison/out/summary.json} &
+\path{evidence_rows}, \path{evidence_guard_runs} \\
+\midrule
+E2 & 协议与类别侧写 &
+\path{evidence_steps/06_fingerprint_sidechannel/out/summary.json} &
+\path{protocol_fingerprint}, \path{bci_sidechannel}, \path{dpi_ascii_disguise} \\
+\midrule
+E3 & Sudoku 主动攻击 &
+\path{evidence_steps/06_fingerprint_sidechannel/out/attack_report.json} &
+\path{scenarios[*].success} \\
+\midrule
+E4 & TLS MITM 对照 &
+\path{evidence_steps/06_fingerprint_sidechannel/out/tls_mitm_demo.json} &
+\path{recover_rate}, \path{success} \\
+\midrule
+E5 & 跨国受限网络性能 &
+\path{evidence_steps/07_cross_region_benchmark/out/summary.json} &
+\path{rows}, \path{medians}, \path{guard}, \path{notes} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{指标定义与统计规则}
+\subsection{性能指标}
+\begin{itemize}
+  \item RTT：\path{avg_rtt_ms} 与 \path{p95_rtt_ms}；
+  \item 开销：\path{overhead_ratio = wire_bytes_total/payload_bytes_total}；
+  \item 吞吐：\path{payload_bps} 与 \path{wire_bps}。
+\end{itemize}
+
+\subsection{内存指标}
+\begin{itemize}
+  \item 绝对峰值：\path{peak_heap_inuse_bytes}；
+  \item 数据面守卫：\path{phase_delta_heap_alloc_bytes}。
+\end{itemize}
+
+第二指标定义用于跨国守卫判定，并与跨国评测脚本的统计字段保持一致，以保证结果可复核性。
+
+\subsection{统计规则}
+本文统一采用重复运行与中位数统计准则。跨国 step07 默认 \path{runs=3}，本地 step05 默认 \path{repeats=3}。若出现单次异常值，不以均值直接下结论。
+
+\section{侧写算法复现要点}
+step06 的协议侧写采用最近质心留一验证。核心过程为：
+\begin{itemize}
+  \item 从长度序列、到达间隔、熵值、可打印比例提取特征向量；
+  \item 逐样本执行 leave-one-out；
+  \item 计算混淆矩阵与总体准确率。
+\end{itemize}
+
+相关脚本：\path{evidence_steps/06_fingerprint_sidechannel/run.py}，核心函数为 \path{feature_from_metrics} 与 \path{nearest_centroid_loo}。
+
+\section{跨国实验部署约束}
+跨国实验采用本机客户端与加拿大区域公网云主机。为保护运维资产安全，正文与附录均不公开服务端公网 IP。受公网策略影响，UDP 直连不可用：
+\begin{itemize}
+  \item Sudoku / Pure-AEAD / MQTT-TLS：TCP 直连；
+  \item DTLS / CoAP：UoT（UDP-over-TCP）中继。
+\end{itemize}
+
+该约束已写入 \path{evidence_steps/07_cross_region_benchmark/out/summary.json:notes.udp_transport}。
+
+\section{复现实验命令}
+\subsection{本地基线（step05）}
+\begin{verbatim}
+cd evidence_steps/05_baseline_comparison
+python3 run.py
+\end{verbatim}
+
+\subsection{侧写与攻击验证（step06）}
+\begin{verbatim}
+cd evidence_steps/06_fingerprint_sidechannel
+python3 run.py
+\end{verbatim}
+
+\subsection{跨国对照（step07）}
+\begin{verbatim}
+KEY=~/.ssh/netbench_id_ed25519
+python3 evidence_steps/07_cross_region_benchmark/run.py \
+  --host <CA_SERVER_HOST> \
+  --user root \
+  --ssh-key "$KEY" \
+  --runs 3 --messages 20 --size 128 --timeout 300
+\end{verbatim}
+
+\section{复核清单}
+\begin{itemize}
+  \item 检查 step05/06/07 的 \path{summary.json} 是否存在且时间戳一致；
+  \item 检查 step07 的 \path{guard} 字段是否满足 Sudoku 条件；
+  \item 检查 step06 的 \path{protocol_fingerprint.accuracy}、\path{bci_sidechannel} 与 \path{mitm_compare}；
+  \item 对照正文图表数值与附录字段映射，确认无手工改写。
+\end{itemize}
+
+\section{附录说明}
+\begin{itemize}
+  \item 本附录仅依赖仓库内证据文件，不依赖外部闭源平台。
+  \item 论文中的关键结论均可通过上述命令重新生成。
+\end{itemize}

@@ -1,0 +1,546 @@
+\chapter{协议设计与实现}
+
+\section{设计目标与总体思路}
+面向 BCI-IoT 的协议实现需要同时满足四项要求：一是握手阶段具备身份认证与抗重放能力；二是会话阶段提供机密性与完整性；三是在密文条件下仍能降低流量外观可学习性；四是关键状态具备上界，适配资源受限设备。基于此，本文采用认证握手、会话记录层与 Sudoku-pure 外观层的分层设计。握手与记录层接口设计参考 TLS/DTLS 与 AEAD 标准化实践\cite{rfc8446,rfc9147,rfc5116}。
+
+与直接复用通用协议栈不同，本文实现强调协议语义与工程边界的一体化：握手失败进入可疑路径处理；重放缓存采用有界结构；外观层映射构表执行冲突检查。上述机制共同构成安全正确性与可部署性的实现基础。
+
+\section{协议分层与数据通路}
+协议部署位置位于应用层与 TCP 之间。数据在发送方向依次经历应用负载封装、会话记录层加密与 Sudoku-pure 外观编码；接收方向按逆序解码与解密。其数据通路如图 \ref{fig:c3-stack} 所示。
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=1mm, minimum height=8mm, text width=6.8cm, align=center},
+  side/.style={draw, rounded corners=1mm, minimum height=8mm, text width=3.8cm, align=center},
+  line/.style={->, line width=0.5pt}
+]
+\node[box] (a1) at (0,0) {应用层：BCI 数据与控制指令};
+\node[box] (a2) at (0,-1.5) {会话记录层：AEAD record（长度前缀 + 密文 + Tag）};
+\node[box] (a3) at (0,-3.0) {Sudoku-pure 外观层：4 字节提示映射 + 填充注入};
+\node[box] (a4) at (0,-4.5) {TCP 承载层};
+
+\node[side] (s1) at (6.2,-1.5) {握手阶段\\身份认证与密钥协商};
+\node[side] (s2) at (6.2,-3.0) {异常路径\\可疑流量处理};
+
+\draw[line] (a1) -- (a2);
+\draw[line] (a2) -- (a3);
+\draw[line] (a3) -- (a4);
+\draw[line, dashed] (s1) -- (a2);
+\draw[line, dashed] (s2) -- (a3);
+\end{tikzpicture}
+\caption{协议分层与数据通路}
+\label{fig:c3-stack}
+\end{figure}
+
+\section{握手协议设计}
+\subsection{握手帧封装}
+握手帧采用固定头 + 可变体结构，帧头字段为：
+\begin{itemize}
+  \item \texttt{magic}：4 字节，常量 \texttt{"IBC1"}；
+  \item \texttt{version}：1 字节，当前版本 \texttt{0x01}；
+  \item \texttt{msg\_type}：1 字节，区分握手消息类型；
+  \item \texttt{body\_len}：2 字节，大端长度。
+\end{itemize}
+
+握手消息类型定义为三步流程：\texttt{ClientHello}、\texttt{ServerHello}、\texttt{ClientFinish}。整体时序如图 \ref{fig:c3-handshake-seq}。
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tikzpicture}[
+  ent/.style={draw, rounded corners=1mm, minimum width=2.8cm, minimum height=7mm, align=center},
+  line/.style={->, line width=0.5pt}
+]
+\node[ent] (c) at (0,0) {Client};
+\node[ent] (s) at (7.2,0) {Server};
+\draw (0,-0.5) -- (0,-5.5);
+\draw (7.2,-0.5) -- (7.2,-5.5);
+
+\draw[line] (0,-1.0) -- (7.2,-1.0);
+\node at (3.6,-0.75) {\scriptsize ClientHello: 证书/签名/时间戳/nonce};
+
+\draw[line] (7.2,-2.4) -- (0,-2.4);
+\node at (3.6,-2.15) {\scriptsize ServerHello: 回显 nonce/签名/Hello 哈希绑定};
+
+\draw[line] (0,-3.8) -- (7.2,-3.8);
+\node at (3.6,-3.55) {\scriptsize ClientFinish: HMAC(confirm\_key, CH\_hash||SH\_hash)};
+
+\node at (3.6,-4.8) {\scriptsize 双方切换到前向安全会话密钥};
+\end{tikzpicture}
+\caption{三次握手时序}
+\label{fig:c3-handshake-seq}
+\end{figure}
+
+\subsection{握手消息字段}
+握手体字段按固定顺序序列化。本文将关键字段摘要为表 \ref{tab:c3-handshake-fields}。
+
+\begin{table}[H]
+\centering
+\small
+\caption{握手消息字段}
+\label{tab:c3-handshake-fields}
+\begin{tabular}{p{2.5cm}p{4.2cm}p{5.3cm}}
+\toprule
+消息 & 关键字段 & 作用 \\
+\midrule
+ClientHello & 协商位、时间戳、客户端随机数、用户摘要、临时公钥、证书、签名 & 提交客户端能力、时效信息与身份签名 \\
+ServerHello & 协商位、时间戳、服务端随机数、随机数回显、临时公钥、证书、Hello 摘要、签名 & 绑定客户端 Hello，上下文防反射与防篡改 \\
+ClientFinish & 双方 Hello 摘要与确认 MAC & 证明客户端持有共享密钥并完成 transcript 绑定 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+其中 \texttt{flags} 的低位用于协商会话 AEAD 算法；\texttt{bit2} 表示下行是否启用 pure 模式。本文实验设置固定为 pure 路径，避免模式切换对结论造成混淆。
+
+\subsection{身份认证与 transcript 绑定}
+握手认证依赖 Ed25519 证书链与消息签名。服务端在验证证书有效性、签名正确性及时间窗口后，才提交重放缓存 token。客户端验证 \texttt{echo\_nonce\_c} 与 \texttt{client\_hello\_hash}，确保 ServerHello 与当前会话上下文一致。
+
+ClientFinish 采用确认 MAC：
+\[
+\mathrm{MAC}_{16}=\mathrm{Trunc}_{16}\!\left(\mathrm{HMAC}_{\mathrm{SHA256}}(k_{\mathrm{confirm}}, H_C \parallel H_S)\right),
+\]
+其中 $H_C$ 与 $H_S$ 分别为 ClientHello 与 ServerHello 的哈希。该机制使握手完整性验证具备显式终结条件。
+
+\subsection{握手阶段安全性分析}
+在本文威胁模型下，可将握手阶段的目标归纳为四项性质：
+\begin{itemize}
+  \item \textbf{P1 身份真实性}：攻击者无法在无私钥条件下伪造合法握手签名；
+  \item \textbf{P2 上下文一致性}：确认码必须绑定双方握手摘要，防止跨会话拼接；
+  \item \textbf{P3 新鲜性约束}：时间窗口与随机数回显共同限制历史报文重放；
+  \item \textbf{P4 失败可终止性}：任一校验失败均进入拒绝路径，不泄漏业务数据。
+\end{itemize}
+
+上述性质由签名验证、摘要绑定、确认码与重放缓存共同提供，其成立条件与外观编码可破解性假设无关。这与 TLS/DTLS 的设计思想一致，即握手安全由身份认证、密钥协商与 transcript 绑定保障\cite{rfc8446,rfc9147}。
+
+\section{会话密钥派生与记录层}
+\subsection{密钥派生}
+双方基于 X25519 临时密钥交换获得共享秘密 $Z$，再结合 transcript 哈希通过 HKDF 派生会话材料。派生输出包括双向会话密钥、双向 nonce salt 及确认密钥：
+\[
+\left(k_{c2s},k_{s2c},salt_{c2s},salt_{s2c},k_{\mathrm{confirm}}\right)=\mathrm{HKDF}(Z, H_C\parallel H_S).
+\]
+
+\subsection{记录层封装}
+会话记录层采用长度前缀与密文组合格式。每条记录结构为：
+\[
+\texttt{uint16 ciphertext\_len} \parallel \texttt{ciphertext}.
+\]
+nonce 采用不随包发送的确定性构造：
+\[
+\mathrm{nonce} = salt_4 \parallel seq_{64},
+\]
+其中 $seq_{64}$ 为单向递增计数器。该设计在 TCP 保序条件下可避免显式携带 nonce 字段，从而减少线长。
+需指出，AEAD 接口本身不提供协议级抗重放判定，该能力应由握手与状态机额外承担\cite{rfc5116}。
+
+\section{抗重放与异常路径处置}
+\subsection{重放缓存策略}
+重放检测 token 定义为：
+\[
+token = user\_hash \parallel nonce_c \parallel cert\_serial.
+\]
+缓存结构为固定容量环形队列，命中即判定重放。其工程目标是将内存复杂度约束在 $O(C)$（$C$ 为缓存容量上界），避免异常流量触发状态无限增长。
+
+\subsection{可疑流量处理}
+当握手解析失败、认证失败或重放命中时，连接进入可疑路径，并以统一错误类型返回给上层。该机制保证攻击输入不会进入真实业务通路，同时保留审计信息用于回放分析。
+
+\subsection{异常流量回落（Fallback）机制}
+为降低异常处置路径的可区分性，本文在可疑路径上实现回落机制。其接口契约为：握手阶段一旦命中可疑条件，服务端返回
+\[
+\texttt{SuspiciousError}=(\texttt{Err},\texttt{Conn}),
+\]
+其中 \texttt{Err} 表示异常类别（重放、认证失败、协议违规等），\texttt{Conn} 为带有已读原始字节缓存能力的连接包装。上层根据策略执行两类动作：
+\begin{itemize}
+  \item \textbf{silent}：丢弃输入并延时关闭；
+  \item \textbf{fallback}：连接诱饵服务并转发可疑流量。
+\end{itemize}
+
+在 fallback 动作下，转发字节流可写为
+\[
+B_{\mathrm{fb}} = B_{\mathrm{rec}} \parallel B_{\mathrm{live}},
+\]
+其中 $B_{\mathrm{rec}}$ 为协议栈已读且缓存的原始线上字节，$B_{\mathrm{live}}$ 为触发后继续到达的剩余字节。该设计可保证诱饵侧看到的输入连续完整，避免因前缀丢失暴露额外判别信号。
+
+实现上，若握手最终成功，会在会话切换前停止录制（\texttt{StopRecording}），从而避免将正常会话数据泄露到 fallback 通道；仅在异常路径保留必要的握手前缀证据用于回落处理。该流程如图 \ref{fig:c3-fallback-flow} 所示。
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=1mm, align=center, minimum height=8mm, text width=3.0cm},
+  line/.style={->, line width=0.5pt}
+]
+\node[box] (a) at (0,0) {握手阶段命中可疑条件};
+\node[box] (b) at (3.8,0) {返回 SuspiciousError\\(Err, Conn)};
+\node[box] (c1) at (7.8,1.5) {silent：\\丢弃并延时关闭};
+\node[box] (c2) at (7.8,-1.5) {fallback：连接诱饵服务};
+\node[box] (d1) at (11.6,-1.5) {先写入 $B_{rec}$\\再双向转发 $B_{live}$};
+
+\draw[line] (a) -- (b);
+\draw[line] (b) -- (c1);
+\draw[line] (b) -- (c2);
+\draw[line] (c2) -- (d1);
+\end{tikzpicture}
+\caption{可疑流量回落机制状态流程}
+\label{fig:c3-fallback-flow}
+\end{figure}
+
+\subsection{与基线方案的异常处置能力差异}
+表 \ref{tab:c3-fallback-compare} 给出本文实现中各路线的异常处置对照。TLS/DTLS、MQTT/TLS 与 CoAP/DTLS 在标准流程下通常表现为告警/断开或超时重试，不提供携带已读原始字节并转发诱饵的协议级接口；Sudoku 在握手层显式输出可疑连接上下文，用于支持统一回落策略\cite{rfc8446,rfc9147,mqtt311,rfc7252}。
+
+\begin{table}[H]
+\centering
+\small
+\caption{异常处置能力对照（本文实现范围）}
+\label{tab:c3-fallback-compare}
+\begin{tabular}{p{2.3cm}p{4.9cm}p{4.6cm}}
+\toprule
+方案 & 握手异常后的典型行为 & 是否提供已读字节回落接口 \\
+\midrule
+TLS/DTLS & 告警并关闭会话，或由上层重连 & 否 \\
+\midrule
+MQTT/TLS & 依赖 TLS 断链与 broker 会话管理 & 否 \\
+\midrule
+CoAP/DTLS & 应答失败、超时与重传控制 & 否 \\
+\midrule
+Sudoku & 返回可疑错误与连接包装，按策略执行 silent/fallback & 是 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{与基线握手路径的实现差异}
+为突出工程差异，本文将 Sudoku 与三类基线握手路径对照如下：
+\begin{itemize}
+  \item \textbf{Pure-AEAD}：无独立握手；会话材料由预共享密钥直接派生；
+  \item \textbf{MQTT/TLS}：安全建立由 TLS 完成，MQTT 层不参与握手密码学验证；
+  \item \textbf{CoAP/DTLS}：安全建立由 DTLS 完成，CoAP 层负责报文语义与重传；
+  \item \textbf{Sudoku}：握手状态机与外观层在同一协议内协同，握手成功后再切换会话记录层。
+\end{itemize}
+
+因此，Sudoku 的安全性增益主要不在单一算法选择，而在握手认证、会话加密、外观调控与异常终止的组合流程完整性。
+
+\section{Sudoku-pure 外观层实现}
+\subsection{映射构表}
+外观层先枚举 4$\times$4 Sudoku 解空间，再基于会话种子重排并抽取 256 个网格与字节值对应。每个字节维护多个候选提示组；构表阶段执行跨字节解码键冲突检测，若冲突则拒绝构表。该步骤保证解码映射单值性。
+
+\subsection{编码与解码}
+编码阶段对每个字节输出 4 个提示字节，并在多个检查点按概率插入填充字节。解码阶段仅提取提示字节，按 4 个一组拼接解码键并查表还原。由于 pure 模式下最外层始终是提示字节流，协议外观可控且解码路径稳定。
+
+\subsection{pure 路径图解与可逆性验证}
+图~\ref{fig:c3-pure-pipeline} 给出 pure 路径从发送到接收的完整闭环。该闭环与编码解码一致性验证实验相对应：发送端执行映射与填充，接收端执行筛选与还原，并以字节级一致性判定可逆性。
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=1mm, align=center, minimum height=8mm, text width=2.35cm},
+  note/.style={draw, dashed, rounded corners=1mm, align=center, minimum height=8mm, text width=3.4cm},
+  line/.style={->, line width=0.5pt}
+]
+\node[box] (p0) at (0,0) {明文字节流\\$m_1,m_2,\dots$};
+\node[box] (p1) at (2.9,0) {AEAD 记录封装\\长度+密文+Tag};
+\node[box] (p2) at (5.8,0) {Sudoku 映射\\1B $\rightarrow$ 4 提示字节};
+\node[box] (p3) at (8.7,0) {填充注入\\外观扰动};
+\node[box] (p4) at (11.6,0) {线上字节流\\wire bytes};
+
+\node[box] (q3) at (8.7,-2.1) {过滤填充字节\\提取提示字节};
+\node[box] (q2) at (5.8,-2.1) {4 字节组键\\查表解码};
+\node[box] (q1) at (2.9,-2.1) {AEAD 验证与解封装\\Tag 校验};
+\node[box] (q0) at (0,-2.1) {恢复明文字节流\\$\hat{m}_1,\hat{m}_2,\dots$};
+
+\node[note] (ev) at (5.8,-3.8) {可逆性验证实验：随机样本往返测试\\判据：$\hat{m}_i=m_i$ 且冲突数为 0};
+
+\draw[line] (p0) -- (p1);
+\draw[line] (p1) -- (p2);
+\draw[line] (p2) -- (p3);
+\draw[line] (p3) -- (p4);
+
+\draw[line] (p4) -- (q3);
+\draw[line] (q3) -- (q2);
+\draw[line] (q2) -- (q1);
+\draw[line] (q1) -- (q0);
+\draw[line, dashed] (q2) -- (ev);
+\end{tikzpicture}
+\caption{Sudoku-pure 编解码闭环与可逆性验证对应关系}
+\label{fig:c3-pure-pipeline}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\caption{pure 路径可逆性验证方法}
+\label{tab:c3-pure-verify-map}
+\begin{tabular}{p{2.8cm}p{4.0cm}p{3.9cm}p{2.2cm}}
+\toprule
+阶段 & 实现位置 & 验证操作 & 判定条件 \\
+\midrule
+映射构表 & Sudoku 映射构表与冲突检测模块 &
+生成 256 字节双向映射并执行全键冲突扫描 &
+解码键单值且无冲突 \\
+\midrule
+编码输出 & 编码器与填充调度模块 &
+对随机负载执行多轮编码并统计提示字节比例 &
+提示集合与填充集合互斥 \\
+\midrule
+解码恢复 & 解码器与提示筛选模块 &
+仅保留提示字节并按 4 字节组查表还原 &
+还原字节与输入逐字节一致 \\
+\midrule
+闭环校验 & 往返一致性测试流程 &
+随机样本执行“编码$\rightarrow$解码”循环验证 &
+往返成功率 100\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{复杂度与工程优化}
+编码与解码均为线性复杂度 $O(n)$。实现层通过以下方式降低常数开销：
+\begin{itemize}
+  \item 预分配写缓冲，减少热路径内存分配；
+  \item 采用开放定址解码表，避免链式结构带来的分支开销；
+  \item 对 ASCII 优先模式构建 24-bit LUT，加速纯提示解码路径；
+  \item 在连接初始化阶段预热公共构表流程，减少一次性抖动。
+\end{itemize}
+
+\subsection{ASCII 模式与自定义字节表特性}
+Sudoku-pure 外观层支持内置 ASCII/高熵布局与自定义字节模板（模式模板）。自定义模板约束为 8 bit 上 ``2 个 x + 4 个 p + 2 个 v''，其中 $x$ 为冗余判别位、$p$ 为位置位、$v$ 为取值位；只有同时满足提示掩码/提示取值条件的字节才会被解码器视为提示字节。该机制使协议可在“可打印性优先”和“高混淆优先”之间切换。
+
+表~\ref{tab:c3-layout-char} 给出布局模式验证结果。结果显示：ASCII 模式的填充字节池全部落在可打印区间（0x20--0x3F），而自定义模板（如 \texttt{xppppxvv}）通过高比特权重填充增强了与普通文本的分离度，同时保持提示字节与填充字节集合互斥，保证可逆解码。
+
+\begin{table}[H]
+\centering
+\small
+\caption{布局模式与字节表特性（实现验证）}
+\label{tab:c3-layout-char}
+{\setlength{\tabcolsep}{3pt}
+\begin{tabular}{p{2.6cm}p{2.0cm}p{1.4cm}p{1.8cm}p{1.4cm}p{1.8cm}}
+\toprule
+模式 & 提示掩码/值 & 提示数 & 填充池大小 & 交集数 & 填充平均汉明重 \\
+\midrule
+ASCII & 0x40 / 0x40 & 64 & 32 & 0 & 3.50 \\
+Entropy & 0x90 / 0x00 & 64 & 16 & 0 & 2.50 \\
+Custom-A (\texttt{xppppxvv}) & 0x84 / 0x84 & 64 & 44 & 0 & 5.36 \\
+Custom-B (\texttt{vppxppvx}) & 0x11 / 0x11 & 64 & 44 & 0 & 5.36 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+从可计算复杂性视角看，Sudoku 映射可视为约束满足/可满足性编码问题\cite{lynce2006satsudoku}，这为后续构表冲突检测与可逆性证明提供了理论支点。
+
+\subsection{Sudoku-packed 编码路径}
+除 pure 路径外，仓库实现还提供 Sudoku-packed。其基本过程是把明文字节流按 6-bit 分组，再映射为符合 Sudoku 字节布局的外观字节。对连续 3 字节输入 $(b_1,b_2,b_3)$，可得到 4 个 6-bit 分组：
+\[
+\begin{aligned}
+g_1 &= (b_1\!\gg\!2),\\
+g_2 &= ((b_1\&0x03)\!\ll\!4)\,|\, (b_2\!\gg\!4),\\
+g_3 &= ((b_2\&0x0F)\!\ll\!2)\,|\, (b_3\!\gg\!6),\\
+g_4 &= (b_3\&0x3F).
+\end{aligned}
+\]
+该路径保留了 Sudoku 字节外观风格（可打印布局与自定义模板仍可生效），但不再执行“每原始字节 $\rightarrow$ 4 提示字节 $\rightarrow$ 数独网格”的离散映射过程，因此混淆强度低于 pure 路径。其工程取舍为：
+\begin{itemize}
+  \item 优点：线长与 RTT 通常优于 pure，带宽利用率更高；
+  \item 缺点：外观随机性下降，对高级侧写模型的抑制能力弱于 pure；
+  \item 适用：链路带宽更紧、但仍希望保持 Sudoku 外观风格的场景。
+\end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\small
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=1mm, align=center, minimum height=8mm, text width=3.2cm},
+  gbox/.style={draw, rounded corners=1mm, align=center, minimum height=8mm, text width=2.3cm},
+  line/.style={->, line width=0.5pt}
+]
+\node[box] (b1) at (0,0) {$b_1$: 高 6 位 + 低 2 位};
+\node[box] (b2) at (4.0,0) {$b_2$: 高 4 位 + 低 4 位};
+\node[box] (b3) at (8.0,0) {$b_3$: 高 2 位 + 低 6 位};
+
+\node[gbox] (g1) at (0,-2.1) {$g_1=b_1\!\gg\!2$};
+\node[gbox] (g2) at (2.7,-2.1) {$g_2=(b_1^{L2},\,b_2^{H4})$};
+\node[gbox] (g3) at (5.4,-2.1) {$g_3=(b_2^{L4},\,b_3^{H2})$};
+\node[gbox] (g4) at (8.1,-2.1) {$g_4=b_3^{L6}$};
+
+\node[box] (o) at (4.0,-4.0) {4 个 6-bit 组\\$\rightarrow$ Sudoku 外观字节流};
+
+\draw[line] (b1) -- (g1);
+\draw[line] (b1) -- (g2);
+\draw[line] (b2) -- (g2);
+\draw[line] (b2) -- (g3);
+\draw[line] (b3) -- (g3);
+\draw[line] (b3) -- (g4);
+\draw[line] (g1) -- (o);
+\draw[line] (g2) -- (o);
+\draw[line] (g3) -- (o);
+\draw[line] (g4) -- (o);
+\end{tikzpicture}
+\caption{Sudoku-packed 的 3B$\rightarrow$4 组分解示意}
+\label{fig:c3-packed-bitflow}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\caption{pure 与 packed 机理对照}
+\label{tab:c3-pure-packed-mechanism}
+\begin{tabular}{p{2.3cm}p{4.7cm}p{4.7cm}}
+\toprule
+维度 & Sudoku-pure & Sudoku-packed \\
+\midrule
+编码颗粒 & 1 字节映射为 4 提示字节 & 3 字节重排为 4 个 6-bit 组 \\
+\midrule
+可逆依据 & 解码键查表 + 冲突拒绝构表 & 固定分组规则 + 反向重组 \\
+\midrule
+外观混淆 & 强（提示组随机 + 填充注入） & 中（保留外观样式，随机性较弱） \\
+\midrule
+线长开销 & 高（4x 主体 + 填充） & 中（约 4/3 主体 + 模板映射） \\
+\midrule
+主要适配场景 & 隐私侧写压力高 & 带宽受限但需保留 Sudoku 风格 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{工程实现、伪代码与工具链}
+\subsection{库与工具分层}
+为兼顾复用性与可测试性，协议实现采用库与工具分离架构。协议库提供握手、记录层与外观层接口；上层工具负责实验驱动、证据采集与可视化分析。应用接入侧支持三类负载形态：
+\begin{itemize}
+  \item stream：用于稳定双向字节流业务；
+  \item mux：在单连接内复用多逻辑通道；
+  \item UoT：在流连接上承载报文语义。
+\end{itemize}
+
+\subsection{核心算法伪代码}
+下文给出握手状态机、pure 编码与异常回落三类机制的形式化伪代码。
+
+\begin{algorithm}[H]
+\small
+\caption{服务端握手校验与会话切换}
+\label{alg:c3-server-handshake}
+\KwIn{原始连接 $conn$，服务端配置 $opts$}
+\KwOut{会话连接或可疑错误}
+基于密钥与布局生成 Sudoku 候选表集合\;
+执行探测解码并选择匹配表\;
+\If{探测失败}{
+  返回 $\mathrm{SuspiciousError}(Err,Conn)$\;
+}
+读取并解析 \texttt{ClientHello}\;
+验证时间窗口、参数协商位、证书与签名\;
+\If{任一校验失败或命中重放缓存}{
+  返回 $\mathrm{SuspiciousError}(Err,Conn)$\;
+}
+生成服务端临时密钥与随机数，发送 \texttt{ServerHello}\;
+按 transcript 计算会话密钥计划\;
+读取 \texttt{ClientFinish} 并校验摘要绑定与确认码\;
+\If{确认失败}{
+  返回 $\mathrm{SuspiciousError}(Err,Conn)$\;
+}
+停止可疑路径录制，切换到会话 AEAD 连接并返回\;
+\end{algorithm}
+
+\begin{algorithm}[H]
+\small
+\caption{Sudoku-pure 写路径编码}
+\label{alg:c3-pure-write}
+\KwIn{明文字节序列 $P$，编码表 $T$，填充阈值 $\tau$}
+\KwOut{线上字节流 $W$}
+$W \leftarrow \emptyset$\;
+\ForEach{$b \in P$}{
+  \If{rand() $\le \tau$}{
+    向 $W$ 追加一个填充字节\;
+  }
+  从 $T.\mathrm{EncodeTable}[b]$ 随机选取提示组 $(h_1,h_2,h_3,h_4)$\;
+  \For{$i\leftarrow 1$ \KwTo $4$}{
+    \If{rand() $\le \tau$}{
+      向 $W$ 追加一个填充字节\;
+    }
+    向 $W$ 追加 $h_i$\;
+  }
+}
+\If{rand() $\le \tau$}{
+  追加尾部填充字节\;
+}
+返回 $W$\;
+\end{algorithm}
+
+\begin{algorithm}[H]
+\small
+\caption{可疑流量回落策略}
+\label{alg:c3-fallback}
+\KwIn{连接包装 $wrapper$，原始连接 $raw$，策略 $action$，诱饵地址 $addr$}
+\KwOut{异常路径处置结果}
+\If{$action=\texttt{silent}$}{
+  丢弃输入并延时关闭连接\;
+  终止\;
+}
+\If{$addr$ 为空}{
+  关闭原始连接并终止\;
+}
+建立到诱饵地址的连接 $dst$\;
+从 $wrapper$ 读取已读缓存字节前缀并写入 $dst$\;
+启动双向转发：$raw \rightarrow dst$ 与 $dst \rightarrow raw$\;
+\end{algorithm}
+\FloatBarrier
+
+\subsection{伪代码与仓库实现映射}
+表 \ref{tab:c3-code-map} 给出伪代码与仓库函数的一一对应关系，用于建立论文描述与实现入口的可追溯映射。
+
+\begin{table}[H]
+\centering
+\footnotesize
+\caption{核心伪代码与实现映射}
+\label{tab:c3-code-map}
+\begin{tabular}{p{2.3cm}p{3.5cm}p{4.5cm}p{2.3cm}}
+\toprule
+功能模块 & 关键函数 & 代码位置 & 对应伪代码 \\
+\midrule
+握手状态机 & \begin{tabular}[t]{@{}l@{}}\texttt{ServerHandshake}\\\texttt{ClientHandshake}\end{tabular} &
+\path{pkg/iotbci/handshake_server.go}、\path{pkg/iotbci/handshake_client.go} &
+算法 \ref{alg:c3-server-handshake} \\
+\midrule
+pure 编解码 & \begin{tabular}[t]{@{}l@{}}\texttt{Conn.Write}\\\texttt{Conn.Read}\end{tabular} &
+\path{pkg/obfs/sudoku/conn.go} &
+算法 \ref{alg:c3-pure-write} \\
+\midrule
+映射构表与冲突检测 & \begin{tabular}[t]{@{}l@{}}\texttt{NewTableWithCustom}\\\texttt{buildTableWith}\\\texttt{Layout}\end{tabular} &
+\path{pkg/obfs/sudoku/table.go} &
+图 \ref{fig:c3-pure-pipeline} 与表 \ref{tab:c3-pure-verify-map} \\
+\midrule
+packed 编解码 & \begin{tabular}[t]{@{}l@{}}\texttt{PackedConn.Write}\\\texttt{PackedConn.Read}\end{tabular} &
+\path{pkg/obfs/sudoku/packed.go} &
+图 \ref{fig:c3-packed-bitflow} \\
+\midrule
+可疑回落 & \texttt{HandleSuspicious} &
+\path{internal/node/fallback.go} &
+算法 \ref{alg:c3-fallback} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{开发与实验工具链选型}
+本文选用 Go 作为协议主实现语言，核心原因有三点：其一，Go 标准库提供稳定的网络与密码学接口，支持在统一代码基中实现握手、记录层与外观层；其二，协程与阻塞 I/O 组合适用于连接态协议与并发评测场景；其三，静态编译与跨平台构建便于在本地与跨区域节点重复部署。据此，本文构建由协议实现、证据采集与图表生成组成的复现实验流程（表 \ref{tab:c3-toolchain}）。
+
+\begin{table}[H]
+\centering
+\small
+\caption{开发与实验工具链及其作用}
+\label{tab:c3-toolchain}
+\begin{tabular}{p{2.0cm}p{3.5cm}p{5.1cm}}
+\toprule
+工具 & 主要用途 & 选型理由 \\
+\midrule
+Go & 协议主实现、基线对照、自动化 bench & 网络/并发/密码库完整，工程可部署性强 \\
+\midrule
+Python & \path{evidence_steps} 复现实验脚本与数据整形 & 数据处理与脚本编排效率高，便于快速复核 \\
+\midrule
+libpcap\\Wireshark & 抓包、会话复核、字段核对 & 行业通用抓包分析链路，便于第三方复核 \\
+\midrule
+GitHub\\Actions & 压测与回归流程自动执行 & 保证结果可重复并降低人工操作偏差 \\
+\midrule
+LaTeX +\\PGFPlots & 论文排版与图表绘制 & 学术写作可控性高，图表与数据可联动 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{本章小结}
+本章完成了协议从机制到实现的系统化设计：三次握手完成认证与密钥协商，记录层提供会话机密性与完整性，Sudoku-pure 外观层承担侧写对抗与外观可控任务，重放缓存与可疑路径机制用于约束异常输入边界。上述实现构成下一章实验验证的技术基础。
