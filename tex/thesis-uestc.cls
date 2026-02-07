@@ -525,8 +525,8 @@
 }
 \renewcommand\thealgocf{\arabic{chapter}-\arabic{algocf}}
 \SetAlgoCaptionSeparator{\null}
-\AtBeginEnvironment{algorithm}{\vspace{9pt}}
-\AfterEndEnvironment{algorithm}{\vspace{9pt}}
+\AtBeginEnvironment{algorithm}{}
+\AfterEndEnvironment{algorithm}{}
 
 %\renewcommand*{\glossarypreamble}{\vspace{-9pt}}
 \newacronymstyle{acronym-uestc}{

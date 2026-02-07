@@ -54,7 +54,7 @@ E5 & 跨国受限网络性能 &
 第二指标定义用于跨国守卫判定，并与跨国评测脚本的统计字段保持一致，以保证结果可复核性。
 
 \subsection{统计规则}
-本文统一采用“重复运行 + 中位数”统计准则。跨国 step07 默认 \path{runs=3}，本地 step05 默认 \path{repeats=3}。若出现单次异常值，不以均值直接下结论。
+本文统一采用重复运行与中位数统计准则。跨国 step07 默认 \path{runs=3}，本地 step05 默认 \path{repeats=3}。若出现单次异常值，不以均值直接下结论。
 
 \section{侧写算法复现要点}
 step06 的协议侧写采用最近质心留一验证。核心过程为：
@@ -67,7 +67,7 @@ step06 的协议侧写采用最近质心留一验证。核心过程为：
 相关脚本：\path{evidence_steps/06_fingerprint_sidechannel/run.py}，核心函数为 \path{feature_from_metrics} 与 \path{nearest_centroid_loo}。
 
 \section{跨国实验部署约束}
-跨国实验采用本机客户端与公网服务端（\texttt{8.219.204.112}）。受公网策略影响，UDP 直连不可用：
+跨国实验采用本机客户端与加拿大区域公网云主机。为保护运维资产安全，正文与附录均不公开服务端公网 IP。受公网策略影响，UDP 直连不可用：
 \begin{itemize}
   \item Sudoku / Pure-AEAD / MQTT-TLS：TCP 直连；
   \item DTLS / CoAP：UoT（UDP-over-TCP）中继。
@@ -92,7 +92,7 @@ python3 run.py
 \begin{verbatim}
 KEY=~/.ssh/netbench_id_ed25519
 python3 evidence_steps/07_cross_region_benchmark/run.py \
-  --host 8.219.204.112 \
+  --host <CA_SERVER_HOST> \
   --user root \
   --ssh-key "$KEY" \
   --runs 3 --messages 20 --size 128 --timeout 300

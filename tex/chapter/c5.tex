@@ -10,13 +10,13 @@
 主动攻击实验显示，重放、篡改与资源探测均进入拒绝路径；TLS MITM 对照中类别恢复率为 1.0，表明链路级加密与业务语义保密之间仍存在可利用风险。Sudoku 将签名认证、摘要绑定、确认码与重放缓存集中在同一状态机，能在工程上提供可验证的握手安全闭环\cite{rfc8446,rfc9147,wilkens2021passivetls}。
 
 \subsection{RQ3：外观编码是否具备可调且可逆特性}
-协议识别结果 96.67\% 说明常规加密流量仍可被特征学习；BCI 类别侧写中，Sudoku 无填充恢复率为 1.0000，而填充模式下降为 0.1667。结合第 3 章可逆构表与冲突拒绝机制，表明 Sudoku 外观层能够在“可逆解码”前提下实现可调混淆\cite{velan2015survey,hayes2016kfingerprinting,sirinam2018deepfingerprinting}。
+协议识别结果 96.67\% 说明常规加密流量仍可被特征学习；BCI 类别侧写中，Sudoku 无填充恢复率为 1.0000，而填充模式下降为 0.1667。结合第 3 章可逆构表与冲突拒绝机制，表明 Sudoku 外观层能够在“可逆解码”前提下实现可调混淆\cite{velan2015survey,pan2016encryptedtrafficcn,hou2024encmalware}。
 
 \subsection{RQ4：结论是否可复核}
 本文各图表均可追溯到仓库证据目录与字段映射；本地与跨国双环境得到一致趋势：Sudoku 对 DTLS/MQTT 的内存守卫稳定通过，RTT 保持同量级。因此，RQ4 成立，结论具备复核性与可重复性。
 
 \section{总体结论}
-本文提出并实现的 IoT\_BCI-Sudoku 协议，不追求单一指标极值，而是追求“安全、效率、抗侧写”三目标可解释平衡。综合证据可得：
+本文提出并实现的 IoT\_BCI-Sudoku 协议面向安全性、效率与抗侧写能力的联合优化。综合证据可得：
 \begin{itemize}
   \item \textbf{性能层面}：Sudoku 在跨国受限网络下 RTT 与主流方案同量级，内存占用明显更低；
   \item \textbf{安全层面}：握手抗重放与抗篡改路径有效，异常输入可被拒绝；
@@ -67,7 +67,7 @@
   \item 相比标准 TLS/DTLS：标准化程度、第三方互操作证据仍不足。
 \end{itemize}
 
-同时，基线协议也存在对应边界：CoAP/DTLS 在公网受限场景下可达性受制于 UDP 路径\cite{rfc7252,rfc9147,rfc7925}；MQTT/TLS 与传统加密隧道仍面临流量侧写识别风险\cite{mqtt311,pan2016encryptedtrafficcn,hou2024encmalware}；Pure-AEAD 路线若无额外握手状态机，重放新鲜性保障较弱\cite{rfc5116}。
+同时，基线协议也存在对应边界：CoAP/DTLS 在公网受限场景下可达性受制于 UDP 路径\cite{rfc7252,rfc9147,rfc8085,rfc4787,li2011nat}；MQTT/TLS 与传统加密隧道仍面临流量侧写识别风险\cite{mqtt311,pan2016encryptedtrafficcn,hou2024encmalware,zheng2023mqtttamarin}；Pure-AEAD 路线若无额外握手状态机，重放新鲜性保障较弱\cite{rfc5116}。
 
 \section{应用场景与工程建议}
 基于实证结果，Sudoku 更适用于以下场景：
