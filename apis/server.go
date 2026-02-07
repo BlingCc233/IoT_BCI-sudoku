@@ -17,6 +17,9 @@ func ServerHandshake(ctx context.Context, rawConn net.Conn, cfg *ServerConfig) (
 	if cfg == nil {
 		return nil, nil, fmt.Errorf("nil server config")
 	}
+	if err := cfg.Validate(); err != nil {
+		return nil, nil, err
+	}
 	return iotbci.ServerHandshake(ctx, rawConn, cfg.toOptions())
 }
 
