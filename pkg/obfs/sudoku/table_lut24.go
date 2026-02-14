@@ -1,9 +1,12 @@
+//go:build unix
+
 package sudoku
 
 import (
 	"fmt"
-	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 func (t *Table) buildDecodeLUT24(keys map[uint32]byte) error {
@@ -12,12 +15,12 @@ func (t *Table) buildDecodeLUT24(keys map[uint32]byte) error {
 	}
 
 	const lutSize = 1 << 24 // 4*6-bit index space
-	raw, err := syscall.Mmap(
+	raw, err := unix.Mmap(
 		-1,
 		0,
 		lutSize*2,
-		syscall.PROT_READ|syscall.PROT_WRITE,
-		syscall.MAP_ANON|syscall.MAP_PRIVATE,
+		unix.PROT_READ|unix.PROT_WRITE,
+		unix.MAP_ANON|unix.MAP_PRIVATE,
 	)
 	if err != nil {
 		// Fall back to open addressing on platforms where mmap isn't available.
@@ -45,7 +48,7 @@ func (t *Table) buildDecodeLUT24(keys map[uint32]byte) error {
 	}
 
 	// Make it read-only after initialization to reduce accidental writes.
-	_ = syscall.Mprotect(raw, syscall.PROT_READ)
+	_ = unix.Mprotect(raw, unix.PROT_READ)
 	t.decodeLUT24 = u16
 	return nil
 }

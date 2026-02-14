@@ -4,48 +4,93 @@ builds:
   - id: iotbci
     main: ./cmd/iotbci
     binary: iotbci
-    goos: [linux, darwin, windows]
+    goos: [android, darwin, freebsd, linux, windows]
     goarch: [amd64, arm64]
+    ignore:
+      - goos: android
+        goarch: amd64
+      - goos: freebsd
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
     ldflags:
       - -s -w
   - id: iotbci-keygen
     main: ./cmd/iotbci-keygen
     binary: iotbci-keygen
-    goos: [linux, darwin, windows]
+    goos: [android, darwin, freebsd, linux, windows]
     goarch: [amd64, arm64]
+    ignore:
+      - goos: android
+        goarch: amd64
+      - goos: freebsd
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
     ldflags:
       - -s -w
   - id: iotbci-bench
     main: ./cmd/iotbci-bench
     binary: iotbci-bench
-    goos: [linux, darwin, windows]
+    goos: [android, darwin, freebsd, linux, windows]
     goarch: [amd64, arm64]
+    ignore:
+      - goos: android
+        goarch: amd64
+      - goos: freebsd
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
     ldflags:
       - -s -w
   - id: iotbci-report
     main: ./cmd/iotbci-report
     binary: iotbci-report
-    goos: [linux, darwin, windows]
+    goos: [android, darwin, freebsd, linux, windows]
     goarch: [amd64, arm64]
+    ignore:
+      - goos: android
+        goarch: amd64
+      - goos: freebsd
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
     ldflags:
       - -s -w
   - id: iotbci-evidence
     main: ./cmd/iotbci-evidence
     binary: iotbci-evidence
-    goos: [linux, darwin, windows]
+    goos: [android, darwin, freebsd, linux, windows]
     goarch: [amd64, arm64]
+    ignore:
+      - goos: android
+        goarch: amd64
+      - goos: freebsd
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
     ldflags:
       - -s -w
   - id: iotbci-capture
     main: ./cmd/iotbci-capture
     binary: iotbci-capture
-    goos: [linux, darwin, windows]
+    goos: [android, darwin, freebsd, linux, windows]
     goarch: [amd64, arm64]
+    ignore:
+      - goos: android
+        goarch: amd64
+      - goos: freebsd
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
     ldflags:
       - -s -w
 
 archives:
   - format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
