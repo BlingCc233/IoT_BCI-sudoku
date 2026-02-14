@@ -35,3 +35,24 @@ jobs:
         with:
           name: coverage
           path: coverage
+
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: reproduce evidence steps (exclude cross-region benchmark)
+        run: bash evidence_steps/run_all.sh
+      - name: upload evidence artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-out
+          path: evidence_steps/*/out
