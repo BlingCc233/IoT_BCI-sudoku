@@ -1,0 +1,416 @@
+{
+  "generated_at": "2026-02-15 00:29:01",
+  "classifier": {
+    "type": "nearest_centroid_loo",
+    "feature": "class_feature_from_metrics (length-seq only, window=128, mean/std/max/min + 16 chunk means)",
+    "source_script": "evidence_steps/06_fingerprint_sidechannel/run.py"
+  },
+  "classes": [
+    "MI-left",
+    "MI-right",
+    "Blink",
+    "Rest"
+  ],
+  "modes": {
+    "no_padding": {
+      "dir_glob": "tmp/side_nopad_*",
+      "run_count": 12,
+      "paths": [
+        "tmp/side_nopad_r0_80_505127",
+        "tmp/side_nopad_r0_82_398325",
+        "tmp/side_nopad_r0_84_768196",
+        "tmp/side_nopad_r0_86_119243",
+        "tmp/side_nopad_r1_80_267536",
+        "tmp/side_nopad_r1_82_83408",
+        "tmp/side_nopad_r1_84_42106",
+        "tmp/side_nopad_r1_86_278408",
+        "tmp/side_nopad_r2_80_619338",
+        "tmp/side_nopad_r2_82_667686",
+        "tmp/side_nopad_r2_84_70174",
+        "tmp/side_nopad_r2_86_645464"
+      ],
+      "by_protocol": {
+        "mqtt-3.1.1-qos0-tls": {
+          "sample_count": 12,
+          "accuracy": 1.0,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 3,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-left": {
+              "Blink": 0,
+              "MI-left": 3,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-right": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 3,
+              "Rest": 0
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 3
+            }
+          }
+        },
+        "coap-udp": {
+          "sample_count": 12,
+          "accuracy": 1.0,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 3,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-left": {
+              "Blink": 0,
+              "MI-left": 3,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-right": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 3,
+              "Rest": 0
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 3
+            }
+          }
+        },
+        "pure-aead-tcp": {
+          "sample_count": 12,
+          "accuracy": 1.0,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 3,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-left": {
+              "Blink": 0,
+              "MI-left": 3,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-right": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 3,
+              "Rest": 0
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 3
+            }
+          }
+        },
+        "iotbci-sudoku-pure-tcp": {
+          "sample_count": 12,
+          "accuracy": 1.0,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 3,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-left": {
+              "Blink": 0,
+              "MI-left": 3,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-right": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 3,
+              "Rest": 0
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 3
+            }
+          }
+        },
+        "iotbci-sudoku-packed-tcp": {
+          "sample_count": 12,
+          "accuracy": 1.0,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 3,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-left": {
+              "Blink": 0,
+              "MI-left": 3,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-right": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 3,
+              "Rest": 0
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 3
+            }
+          }
+        }
+      }
+    },
+    "padding_20_45": {
+      "dir_glob": "tmp/side_pad_*",
+      "run_count": 12,
+      "paths": [
+        "tmp/side_pad_r0_80_464072",
+        "tmp/side_pad_r0_82_341291",
+        "tmp/side_pad_r0_84_44014",
+        "tmp/side_pad_r0_86_455264",
+        "tmp/side_pad_r1_80_698445",
+        "tmp/side_pad_r1_82_881196",
+        "tmp/side_pad_r1_84_852353",
+        "tmp/side_pad_r1_86_209923",
+        "tmp/side_pad_r2_80_597075",
+        "tmp/side_pad_r2_82_184843",
+        "tmp/side_pad_r2_84_809558",
+        "tmp/side_pad_r2_86_712814"
+      ],
+      "by_protocol": {
+        "mqtt-3.1.1-qos0-tls": {
+          "sample_count": 12,
+          "accuracy": 1.0,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 3,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-left": {
+              "Blink": 0,
+              "MI-left": 3,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-right": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 3,
+              "Rest": 0
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 3
+            }
+          }
+        },
+        "coap-udp": {
+          "sample_count": 12,
+          "accuracy": 1.0,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 3,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-left": {
+              "Blink": 0,
+              "MI-left": 3,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-right": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 3,
+              "Rest": 0
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 3
+            }
+          }
+        },
+        "pure-aead-tcp": {
+          "sample_count": 12,
+          "accuracy": 1.0,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 3,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-left": {
+              "Blink": 0,
+              "MI-left": 3,
+              "MI-right": 0,
+              "Rest": 0
+            },
+            "MI-right": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 3,
+              "Rest": 0
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 3
+            }
+          }
+        },
+        "iotbci-sudoku-pure-tcp": {
+          "sample_count": 12,
+          "accuracy": 0.16666666666666666,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 0,
+              "MI-left": 2,
+              "MI-right": 1,
+              "Rest": 0
+            },
+            "MI-left": {
+              "Blink": 2,
+              "MI-left": 0,
+              "MI-right": 0,
+              "Rest": 1
+            },
+            "MI-right": {
+              "Blink": 1,
+              "MI-left": 1,
+              "MI-right": 0,
+              "Rest": 1
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 1,
+              "Rest": 2
+            }
+          }
+        },
+        "iotbci-sudoku-packed-tcp": {
+          "sample_count": 12,
+          "accuracy": 0.25,
+          "labels": [
+            "Blink",
+            "MI-left",
+            "MI-right",
+            "Rest"
+          ],
+          "confusion": {
+            "Blink": {
+              "Blink": 0,
+              "MI-left": 2,
+              "MI-right": 0,
+              "Rest": 1
+            },
+            "MI-left": {
+              "Blink": 2,
+              "MI-left": 0,
+              "MI-right": 1,
+              "Rest": 0
+            },
+            "MI-right": {
+              "Blink": 0,
+              "MI-left": 1,
+              "MI-right": 1,
+              "Rest": 1
+            },
+            "Rest": {
+              "Blink": 0,
+              "MI-left": 0,
+              "MI-right": 1,
+              "Rest": 2
+            }
+          }
+        }
+      }
+    }
+  }
+}
