@@ -2,12 +2,12 @@ Cross-region benchmark summary (8.219.204.112)
 runs=3, messages=20, payload=128B
 
 Medians by protocol:
-- iotbci-sudoku-pure-tcp: avg_rtt_ms=108.676044, p95_rtt_ms=138.348834, overhead=5.18125, client_mem_metric(phase_delta_heap_alloc_bytes)=2712.0, client_peak_heap_inuse=1056768.0, n_ok=3/3, transport=direct
-- iotbci-sudoku-packed-tcp: avg_rtt_ms=105.535683, p95_rtt_ms=131.831417, overhead=1.7388671875, client_mem_metric(phase_delta_heap_alloc_bytes)=2936.0, client_peak_heap_inuse=999424.0, n_ok=3/3, transport=direct
-- pure-aead-tcp: avg_rtt_ms=106.653819, p95_rtt_ms=131.503042, overhead=1.140625, client_mem_metric(phase_delta_heap_alloc_bytes)=16704.0, client_peak_heap_inuse=663552.0, n_ok=3/3, transport=direct
-- dtls-psk-aes128gcm: avg_rtt_ms=109.040136, p95_rtt_ms=133.802041, overhead=2.3279296875, client_mem_metric(phase_delta_heap_alloc_bytes)=185472.0, client_peak_heap_inuse=925696.0, n_ok=3/3, transport=udp-over-tcp-relay
-- coap-udp: avg_rtt_ms=112.804716, p95_rtt_ms=113.895375, overhead=1.0859375, client_mem_metric(phase_delta_heap_alloc_bytes)=84984.0, client_peak_heap_inuse=761856.0, n_ok=3/3, transport=udp-over-tcp-relay
-- mqtt-3.1.1-qos0-tls: avg_rtt_ms=150.071536, p95_rtt_ms=208.136833, overhead=2.494921875, client_mem_metric(phase_delta_heap_alloc_bytes)=97680.0, client_peak_heap_inuse=884736.0, n_ok=3/3, transport=direct
+- iotbci-sudoku-pure-tcp: avg_rtt_ms=108.676044, p95_rtt_ms=138.348834, overhead=5.18125, client_mem_metric(peak_heap_inuse_bytes)=1589248, client_peak_heap_inuse=1589248, n_ok=3/3, transport=direct
+- iotbci-sudoku-packed-tcp: avg_rtt_ms=105.535683, p95_rtt_ms=131.831417, overhead=1.7388671875, client_mem_metric(peak_heap_inuse_bytes)=835584, client_peak_heap_inuse=835584, n_ok=3/3, transport=direct
+- pure-aead-tcp: avg_rtt_ms=106.653819, p95_rtt_ms=131.503042, overhead=1.140625, client_mem_metric(peak_heap_inuse_bytes)=901120, client_peak_heap_inuse=901120, n_ok=3/3, transport=direct
+- dtls-psk-aes128gcm: avg_rtt_ms=109.040136, p95_rtt_ms=133.802041, overhead=2.3279296875, client_mem_metric(peak_heap_inuse_bytes)=4456448, client_peak_heap_inuse=4456448, n_ok=3/3, transport=udp-over-tcp-relay
+- coap-udp: avg_rtt_ms=112.804716, p95_rtt_ms=113.895375, overhead=1.0859375, client_mem_metric(peak_heap_inuse_bytes)=2269184, client_peak_heap_inuse=2269184, n_ok=3/3, transport=udp-over-tcp-relay
+- mqtt-3.1.1-qos0-tls: avg_rtt_ms=150.071536, p95_rtt_ms=208.136833, overhead=2.494921875, client_mem_metric(peak_heap_inuse_bytes)=4087808, client_peak_heap_inuse=4087808, n_ok=3/3, transport=direct
 
 Guard checks:
 - pure_rtt_lt_dtls: True
