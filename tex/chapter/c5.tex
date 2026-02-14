@@ -4,16 +4,16 @@
 围绕第 1 章提出的 RQ1--RQ4，本文结论如下。
 
 \subsection{RQ1：受限设备可用性是否成立}
-在跨国受限网络中，Sudoku-pure 与 Sudoku-packed 的 RTT 分别为 108.676ms 与 105.536ms，与 DTLS（109.040ms）处于同量级，且均低于 MQTT/TLS（150.072ms）；在峰值堆内存指标上，Sudoku 两条路径分别为 1589248B 与 835584B，显著低于 DTLS（4456448B）与 MQTT/TLS（4087808B）。因此，RQ1 成立：在真实受限部署下，Sudoku 可在资源可控前提下保持可用\cite{restuccia2020lowpower,gallenmueller2019dtls}。
+在跨国受限网络中，Sudoku-pure 与 Sudoku-packed 的 RTT 分别为 108.676ms 与 105.536ms，与 DTLS（109.040ms）处于同量级，且均低于 MQTT/TLS（150.072ms）；在峰值堆内存指标上，Sudoku 两条路径分别为 1589248B 与 835584B，显著低于 DTLS（4456448B）与 MQTT/TLS（4087808B）（见表~\ref{tab:c4-cross-region-main}）。因此，RQ1 成立：在真实受限部署下，Sudoku 可在资源可控前提下保持可用\cite{restuccia2020lowpower,gallenmueller2019dtls}。
 
 \subsection{RQ2：握手安全机制是否有效}
-主动攻击实验显示，重放、篡改与资源探测均进入拒绝路径；TLS MITM 对照中类别恢复率为 1.0，表明链路级加密与业务语义保密之间仍存在可利用风险。Sudoku 将签名认证、摘要绑定、确认码与重放缓存集中在同一状态机，能在工程上提供可验证的握手安全闭环\cite{rfc8446,rfc9147,wilkens2021passivetls}。
+主动攻击实验显示，重放、篡改与资源探测均进入拒绝路径；TLS MITM 对照中类别恢复率为 1.0，表明链路级加密与业务语义保密之间仍存在可利用风险（见表~\ref{tab:c4-security-evidence}）。Sudoku 将签名认证、摘要绑定、确认码与重放缓存集中在同一状态机，能在工程上提供可验证的握手安全闭环\cite{rfc8446,rfc9147,wilkens2021passivetls}。
 
 \subsection{RQ3：外观编码是否具备可调且可逆特性}
-协议识别结果 96.67\% 说明常规加密流量仍可被特征学习；BCI 类别侧写中，Sudoku 无填充恢复率为 1.0000，而填充模式下降为 0.1667。结合第 3 章可逆构表与冲突拒绝机制，表明 Sudoku 外观层能够在“可逆解码”前提下实现可调混淆\cite{velan2015survey,pan2016encryptedtrafficcn,hou2024encmalware}。
+协议识别结果 96.67\% 说明常规加密流量仍可被特征学习；扩展对照中，MQTT/TLS、CoAP/UDP 与 Pure-AEAD 的协议侧写召回率均为 1.0000。BCI 类别侧写中，MQTT/TLS、CoAP/UDP、Pure-AEAD 与 Sudoku 无填充恢复率均为 1.0000，Sudoku-pure 填充模式为 0.1667，Sudoku-packed（prefer\_entropy）填充模式为 0.2500（见图~\ref{fig:c4-proto-recall-extended}、图~\ref{fig:c4-sidechannel-dpi}）。结合第 3 章可逆构表与冲突拒绝机制，表明 Sudoku 外观层能够在“可逆解码”前提下实现可调混淆\cite{velan2015survey,pan2016encryptedtrafficcn,hou2024encmalware}。
 
 \subsection{RQ4：结论是否可复核}
-本文各图表均可追溯到仓库证据目录与字段映射；本地与跨国双环境得到一致趋势：Sudoku 对 DTLS/MQTT 的内存守卫稳定通过，RTT 保持同量级。因此，RQ4 成立，结论具备复核性与可重复性。
+本文各图表均可追溯到仓库证据目录与字段映射（见表~\ref{tab:c4-source-map}、表~\ref{tab:c4-repro-entry}）；本地与跨国双环境得到一致趋势：Sudoku 对 DTLS/MQTT 的内存守卫稳定通过，RTT 保持同量级。因此，RQ4 成立，结论具备复核性与可重复性。
 
 \section{总体结论}
 本文提出并实现的 IoT\_BCI-Sudoku 协议面向安全性、效率与抗侧写能力的联合优化。综合证据可得：
@@ -24,7 +24,9 @@
   \item \textbf{工程层面}：pure 与 packed 形成可配置取舍，分别面向混淆优先与带宽优先场景。
 \end{itemize}
 
-据此，Sudoku 可定位为 BCI-IoT 场景下的“工程可用协议”：在受限部署条件下可提供更可控的资源行为与更强的外观调控能力。
+该结论与既有 IoT 安全综述形成一致：一方面，IoT 场景需要兼顾安全、隐私与资源约束的联合设计\cite{sicari2015iot}；另一方面，分布式与边缘化部署在带来能力提升的同时也会引入新的安全与隐私挑战\cite{roman2013distributediot}。
+
+据此，Sudoku 可界定为 BCI-IoT 场景下具备工程可部署性的协议方案：在受限部署条件下可提供更可控的资源行为与更强的外观调控能力。
 
 \begin{figure}[htbp]
 \centering
