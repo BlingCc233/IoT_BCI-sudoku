@@ -179,7 +179,7 @@ $\mathrm{RecoverRate} \leftarrow ok/|S|$\;
 RTT、P95、开销、吞吐 &
 时延聚合与分位统计 &
 netbench/metrics.go；bench/util.go &
-Step05/Step07 指标文件：平均 RTT、P95 RTT、开销比 \\
+指标文件：平均 RTT、P95 RTT、开销比 \\
 \midrule
 外观统计与序列特征 &
 写字节频数、序列汇总、字节统计 &
@@ -193,18 +193,18 @@ bench/mem.go；netbench/metrics.go &
 \midrule
 协议识别与类别恢复 &
 最近质心留一分类（算法 \ref{alg:c4-loo-centroid}） &
-Step06 侧写脚本（run.py） &
-Step06：主报告与补充留档的分类统计结果及混淆矩阵可视化 \\
+侧写脚本（run.py） &
+主报告与补充留档的分类统计结果及混淆矩阵可视化 \\
 \midrule
 TLS MITM 恢复率 &
 恢复率计算函数（算法 \ref{alg:c4-attack-judge}） &
 cmd/iotbci-tls-mitm-demo/main.go &
-Step06：MITM 对照实验统计输出（恢复率字段） \\
+MITM 对照实验统计输出（恢复率字段） \\
 \midrule
 异常回落场景 &
 HandleSuspicious &
 node/fallback.go &
-Step06 攻防输出与表 \ref{tab:c4-fallback-sim} 仿真记录 \\
+攻防输出与表 \ref{tab:c4-fallback-sim} 仿真记录 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -229,7 +229,7 @@ cmd/iotbci-evidence &
 本地基线统计汇总与协议分项指标报表 \\
 \midrule
 侧写与主动攻击 &
-Step06 侧写脚本 + cmd/iotbci-attack &
+侧写脚本 + cmd/iotbci-attack &
 样本轮次、BCI 类别构造、填充区间 &
 侧写统计汇总、混淆矩阵与主动攻击判定报表 \\
 \midrule
@@ -239,7 +239,7 @@ cmd/iotbci-tls-mitm-demo &
 MITM 对照恢复率统计报表 \\
 \midrule
 跨国受限网络对照 &
-Step07 跨国脚本 + cmd/iotbci-netbench &
+跨国脚本 + cmd/iotbci-netbench &
 境外节点参数（匿名化）、端口映射、重复轮次 &
 跨国对照统计汇总与协议分项明细 \\
 \bottomrule
@@ -425,7 +425,7 @@ DPI 对照实验中，Sudoku-ASCII 样本由提示字节池与填充字节池按
 
 从攻击语义看，被动攻击者在不解密报文的条件下即可利用长度序列恢复类别；当恢复率接近 1 时，业务类别轨迹可被稳定重建，进而导致意图序列泄露、会话状态推断与针对性干预窗口预测风险上升。在 BCI-IoT 场景中，该风险将直接削弱用户隐私与控制链路安全边界\cite{velan2015survey,pan2016encryptedtrafficcn,meng2024adversarial}。
 
-进一步地，为补充 TLS/Sudoku 之外的基线对照，本文从 Step06 的协议识别混淆矩阵计算了各协议召回率（每类样本 5 轮）。图~\ref{fig:c4-proto-recall-extended} 显示，MQTT/TLS、CoAP/UDP、Pure-AEAD、DTLS 与 Sudoku-pure 的召回率均为 1.0000；仅 Sudoku-packed 为 0.8000（1 次误判为 Sudoku-pure）。该结果表明，在统一特征与样本规模下，MQTT、CoAP、Pure-AEAD 的外观特征同样可被稳定识别，侧写风险并非仅存在于 TLS 与 Sudoku 的二元对照中。
+进一步地，就基线对照，本文从协议识别混淆矩阵计算了各协议召回率（每类样本 5 轮）。图~\ref{fig:c4-proto-recall-extended} 显示，MQTT/TLS、CoAP/UDP、Pure-AEAD、DTLS 与 Sudoku-pure 的召回率均为 1.0000；仅 Sudoku-packed 为 0.8000（1 次误判为 Sudoku-pure）。该结果表明，在统一特征与样本规模下，MQTT、CoAP、Pure-AEAD 的外观特征同样可被稳定识别，侧写风险并非仅存在于 TLS 与 Sudoku 的二元对照中。
 
 \begin{figure}[htbp]
 \centering

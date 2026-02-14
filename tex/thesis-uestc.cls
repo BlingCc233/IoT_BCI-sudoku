@@ -344,6 +344,10 @@
 \newcommand{\zh@theschool}{\chinesespace}
 \newcommand{\zh@themajor}{\chinesespace}
 \newcommand{\zh@theadvisor}{\chinesespace}
+\newcommand{\zh@coverTitleLineA}{\chinesespace}
+\newcommand{\zh@coverTitleLineB}{}
+\newcommand{\zh@coverSchoolLineA}{\chinesespace}
+\newcommand{\zh@coverSchoolLineB}{}
 
 \newcommand{\en@thetitle}{\chinesespace}
 \newcommand{\en@theauthor}{\chinesespace}
@@ -356,6 +360,8 @@
 
 \renewcommand{\title}[2]{
   \renewcommand{\zh@thetitle}{#1}
+  \renewcommand{\zh@coverTitleLineA}{#1}
+  \renewcommand{\zh@coverTitleLineB}{}
   \renewcommand{\en@thetitle}{#2}
 }
 
@@ -376,7 +382,27 @@
 
 \newcommand{\school}[2]{
   \renewcommand{\zh@theschool}{#1}
+  \renewcommand{\zh@coverSchoolLineA}{#1}
+  \renewcommand{\zh@coverSchoolLineB}{}
   \renewcommand{\en@theschool}{#2}
+}
+
+\newcommand{\covertitlelines}[2]{
+  \renewcommand{\zh@coverTitleLineA}{#1}
+  \renewcommand{\zh@coverTitleLineB}{#2}
+}
+
+\newcommand{\coverschoollines}[2]{
+  \renewcommand{\zh@coverSchoolLineA}{#1}
+  \renewcommand{\zh@coverSchoolLineB}{#2}
+}
+
+\newcommand{\coverlabel}[1]{
+  \makebox[4em][l]{#1}
+}
+
+\newcommand{\coverlabelpair}[2]{
+  \hbox to 4em{#1\hfil#2}
 }
 
 \newcommand{\advisor}[2]{
@@ -628,30 +654,29 @@
     %\vspace{0.4cm}
     \includegraphics[width=180bp]{logo.pdf} \\[18bp]
   }{\includegraphics[width=180bp]{logo.pdf} \\[40bp]}
-  \begin{tabular}{lp{4.2in}}
-    \bfseries\fontsize{18pt}{18pt}\selectfont 论文题目 & \multirow[t]{2}{4.2in}{
-        \centering
-          \bfseries\fontsize{18pt}{18pt}\selectfont
-          \zh@thetitle
-    } \\
-    \cline{2-2}
-            & \\
-    \cline{2-2}
-  \end{tabular}\hspace*{\fill} \\[4bp]
+  {\renewcommand{\arraystretch}{1.00}
+  \setlength{\extrarowheight}{1pt}
   \begin{tabular}{>{\bfseries\fontsize{16pt}{16pt}\selectfont}l
-      >{\centering\arraybackslash\bfseries\fontsize{16pt}{16pt}\selectfont}
+      >{\centering\arraybackslash\bfseries\fontsize{16pt}{18pt}\selectfont}
       p{3.77in}p{15pt}}
-    学科专业 & \zh@themajor &\\
+    \strut \coverlabel{论文题目} & \strut \zh@coverTitleLineA &\\
     \cline{2-2}
-    学\chinesespace\chinesespace 号 & \thestudentnumber & \\
+    \strut & \strut \zh@coverTitleLineB &\\
     \cline{2-2}
-    作者姓名 & \zh@theauthor &\\
+    \strut \coverlabel{学科专业} & \strut \zh@themajor &\\
     \cline{2-2}
-    指导老师 & \zh@theadvisor &\\
+    \strut \coverlabelpair{学}{号} & \strut \thestudentnumber & \\
     \cline{2-2}
-    学\chinesespace\chinesespace 院 & \zh@theschool &\\
+    \strut \coverlabel{作者姓名} & \strut \zh@theauthor &\\
+    \cline{2-2}
+    \strut \coverlabel{指导老师} & \strut \zh@theadvisor &\\
+    \cline{2-2}
+    \strut \coverlabelpair{学}{院} & \strut \zh@coverSchoolLineA &\\
+    \cline{2-2}
+    \strut & \strut \zh@coverSchoolLineB &\\
     \cline{2-2}
   \end{tabular}
+  }
 \end{center}
 
 \ifbachelor{}{\thetitlepage}
