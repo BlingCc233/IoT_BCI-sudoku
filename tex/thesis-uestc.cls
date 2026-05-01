@@ -183,15 +183,15 @@
   {\centering\fontsize{15pt}{15pt}\selectfont\strong\thispagestyle{fancy}}{\thechapter}{7.5pt}{}
 
 \titleformat{\section}[block]
-  {\fontsize{14pt}{14pt}\selectfont\strong}
+  {\fontsize{14bp}{16.8bp}\selectfont\strong}
   {\bfseries\thesection}{7pt}{}
 
 \titleformat{\subsection}[block]
-  {\fontsize{14pt}{14pt}\selectfont\strong}
+  {\fontsize{14bp}{16.8bp}\selectfont\strong}
   {\bfseries\thesubsection}{7pt}{}
 
 \titleformat{\subsubsection}[block]
-  {\fontsize{12pt}{12pt}\selectfont\strong}
+  {\fontsize{14bp}{16.8bp}\selectfont\strong}
   {\bfseries\thesubsubsection}{6pt}{}
 
 \RequirePackage[hang, perpage]{footmisc}
@@ -1073,6 +1073,7 @@ School: & \en@theschool \\
   \thispagestyle{fancy}
   \interlinepenalty=10000
   \begin{spacing}{1.667}
+  \small
 }{}{}
 
 \apptocmd{\bibliography}{

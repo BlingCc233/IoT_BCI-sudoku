@@ -38,7 +38,7 @@
 \subsection{握手帧封装}
 握手帧采用固定头 + 可变体结构，帧头字段为：
 \begin{itemize}
-  \item \texttt{magic}：4 字节，常量 \texttt{"IBC1"}；
+  \item \texttt{magic}：4 字节，常量“\texttt{IBC1}”；
   \item \texttt{version}：1 字节，当前版本 \texttt{0x01}；
   \item \texttt{msg\_type}：1 字节，区分握手消息类型；
   \item \texttt{body\_len}：2 字节，大端长度。
