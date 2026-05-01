@@ -261,7 +261,7 @@
   }{
     \pdfbookmark{Chinese Abstract}{chineseabstract}
   }
-  \setcounter{pseudopage}{1}
+  \setcounter{pseudopage}{0}
   \chapter*{\heiti 摘\chinesespace 要}
   \fancyhf{}
   \fancyhead[C]{\fontsize{10.5pt}{12.6pt}\selectfont 摘要}
@@ -1063,7 +1063,7 @@ School: & \en@theschool \\
     \interlinepenalty=10000
     \begin{spacing}{1.667}
     \thispagestyle{fancy}
-    \small
+    \fontsize{10.5pt}{12.6pt}\selectfont
 }{
     \end{spacing}
   \end{thebibliography}
@@ -1110,7 +1110,7 @@ School: & \en@theschool \\
   \setlength{\itemsep}{0bp}\setlength{\parskip}{0pt}
   \begin{spacing}{1.667}
   \thispagestyle{fancy}
-  \small
+  \fontsize{10.5pt}{12.6pt}\selectfont
 }{
   \end{spacing}
   \end{thebibliography}

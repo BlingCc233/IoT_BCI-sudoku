@@ -116,7 +116,7 @@ FUNCTION {bib.begin}
     write$ newline$
     "\interlinepenalty=10000"
     write$ newline$
-    "\setlength{\itemsep}{0bp}\setlength{\parskip}{0pt}\small"
+    "\setlength{\itemsep}{0bp}\setlength{\parskip}{0pt}\fontsize{10.5pt}{12.6pt}\selectfont"
     write$
     newline$
 }
@@ -499,7 +499,7 @@ FUNCTION {conference}
 {
     bibitem.begin
     format.authors write$ add.period
-    format.title "[C]" * write$ add.period
+    format.title "[C]//" * write$
     journal missing$
     {
         format.booktitle write$
