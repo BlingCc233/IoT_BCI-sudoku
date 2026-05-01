@@ -179,27 +179,31 @@
 \setcounter{secnumdepth}{3}
 \setcounter{tocdepth}{2}
 
+\newcommand{\thesisheadingfour}{\fontsize{14bp}{16.8bp}\selectfont}
+\newcommand{\thesissmallfont}{\fontsize{10.5bp}{12.6bp}\selectfont}
+\newcommand{\thesisbibfont}{\fontsize{10.53937bp}{12.64724bp}\selectfont}
+
 \titleformat{\chapter}[block]
   {\centering\fontsize{15pt}{15pt}\selectfont\strong\thispagestyle{fancy}}{\thechapter}{7.5pt}{}
 
 \titleformat{\section}[block]
-  {\fontsize{14bp}{16.8bp}\selectfont\strong}
-  {\bfseries\thesection}{7pt}{}
+  {\normalfont\thesisheadingfour\strong}
+  {\normalfont\thesisheadingfour\bfseries\thesection}{7pt}{\thesisheadingfour}
 
 \titleformat{\subsection}[block]
-  {\fontsize{14bp}{16.8bp}\selectfont\strong}
-  {\bfseries\thesubsection}{7pt}{}
+  {\normalfont\thesisheadingfour\strong}
+  {\normalfont\thesisheadingfour\bfseries\thesubsection}{7pt}{\thesisheadingfour}
 
 \titleformat{\subsubsection}[block]
-  {\fontsize{14bp}{16.8bp}\selectfont\strong}
-  {\bfseries\thesubsubsection}{6pt}{}
+  {\normalfont\thesisheadingfour\strong}
+  {\normalfont\thesisheadingfour\bfseries\thesubsubsection}{6pt}{\thesisheadingfour}
 
 \RequirePackage[hang, perpage]{footmisc}
 \addtolength{\footnotesep}{0pt}
 \setlength{\footnotemargin}{13.5pt}
 
 \renewcommand{\footnotesize}{\fontsize{9pt}{10.8pt}\selectfont}
-\renewcommand{\small}{\fontsize{10.5pt}{12.6pt}\selectfont}
+\renewcommand{\small}{\thesissmallfont}
 \renewcommand\footnotelayout{\fontsize{9}{11.7}\selectfont}
 
 \renewcommand{\thefootnote}{\ifcase\value{footnote}\or\ding{172}\or
@@ -1057,13 +1061,14 @@ School: & \en@theschool \\
 
 \renewcommand{\bibname}{\thesisbibname}
 \renewcommand{\@biblabel}[1]{[#1]\hfill}
+\apptocmd{\thebibliography}{\thesisbibfont}{}{}
 
 \newenvironment{thesisthebibliography}{
   \begin{thebibliography}{lo}
     \interlinepenalty=10000
     \begin{spacing}{1.667}
     \thispagestyle{fancy}
-    \fontsize{10.5pt}{12.6pt}\selectfont
+    \thesisbibfont
 }{
     \end{spacing}
   \end{thebibliography}
@@ -1073,7 +1078,7 @@ School: & \en@theschool \\
   \thispagestyle{fancy}
   \interlinepenalty=10000
   \begin{spacing}{1.667}
-  \small
+  \thesisbibfont
 }{}{}
 
 \apptocmd{\bibliography}{
@@ -1111,7 +1116,7 @@ School: & \en@theschool \\
   \setlength{\itemsep}{0bp}\setlength{\parskip}{0pt}
   \begin{spacing}{1.667}
   \thispagestyle{fancy}
-  \fontsize{10.5pt}{12.6pt}\selectfont
+  \thesisbibfont
 }{
   \end{spacing}
   \end{thebibliography}
