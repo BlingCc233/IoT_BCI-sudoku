@@ -69,11 +69,11 @@ RQ4 & 多轮重复实验给出一致结论 & 中位数结果与稳定性检查 \
 \end{tabular}
 \end{table}
 
-针对 RQ4，本文采用如下判定规则。记纯组合数独方案为 pure 模式：
+针对 RQ4，本文采用如下判定规则。记纯组合数独方案为纯模式：
 \[
 \begin{aligned}
-G_{\text{pure}} &= \mathbf{1}\!\left(\mathrm{RTT}_{\text{pure}} < \min(\mathrm{RTT}_{\mathrm{DTLS}}, \mathrm{RTT}_{\mathrm{MQTT}})\right) \\
-&\times \mathbf{1}\!\left(\mathrm{MEM}_{\text{pure}} < \min(\mathrm{MEM}_{\mathrm{DTLS}}, \mathrm{MEM}_{\mathrm{MQTT}})\right).
+G_{\text{纯}} &= \mathbf{1}\!\left(\mathrm{RTT}_{\text{纯}} < \min(\mathrm{RTT}_{\mathrm{DTLS}}, \mathrm{RTT}_{\mathrm{MQTT}})\right) \\
+&\times \mathbf{1}\!\left(\mathrm{MEM}_{\text{纯}} < \min(\mathrm{MEM}_{\mathrm{DTLS}}, \mathrm{MEM}_{\mathrm{MQTT}})\right).
 \end{aligned}
 \]
 其中 MEM 取峰值内存指标，overhead 允许高于基线。
@@ -90,12 +90,12 @@ G_{\text{pure}} &= \mathbf{1}\!\left(\mathrm{RTT}_{\text{pure}} < \min(\mathrm{R
 第 4 章将按“实验设置 $\rightarrow$ 指标定义 $\rightarrow$ 统计结论”三步验证 H1--H4。若任一命题不成立，将在结论章节给出反例条件与失败边界，不进行选择性报告。
 
 \section{预实验观察}
-为验证研究目标的可行性，本文先给出基线实验中位数快照。表 \ref{tab:c1-baseline-snapshot} 与图 \ref{fig:c1-rtt-mem-snapshot} 显示：纯组合数独相比 DTLS 与 MQTT 在 RTT 与内存两项关键指标上均更优；与 Pure-AEAD 和 CoAP 相比，纯组合数独的优势不在绝对时延，而在保持安全与外观控制能力下的综合可用性。
+为验证研究目标的可行性，本文先给出基线实验中位数快照。表 \ref{tab:c1-baseline-snapshot} 与图 \ref{fig:c1-rtt-mem-snapshot} 显示：纯组合数独在 RTT 与内存两项指标上优于 DTLS 与 MQTT；相较 Pure-AEAD 和 CoAP，其优势主要体现在保留握手安全与外观控制的同时维持可用性能。
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{基线中位数快照}
+\caption{本地基线下纯组合数独的 RTT 与峰值内存中位数快照}
 \label{tab:c1-baseline-snapshot}
 \begin{tabular}{p{3.8cm}p{2.0cm}p{2.6cm}p{2.1cm}}
 \toprule
@@ -153,7 +153,7 @@ MQTT/TLS & 0.084587 & 5128192 & 2.7884 \\
 \addplot coordinates {(SP,2.812) (AEAD,1.070) (CoAP,4.555) (DTLS,4.453) (MQTT,4.891)};
 \end{axis}
 \end{tikzpicture}
-\caption{关键性能对比（SP 表示纯组合数独）}
+\caption{本地基线下 RTT 与峰值内存对照（SP 表示纯组合数独）}
 \label{fig:c1-rtt-mem-snapshot}
 \end{figure}
 
@@ -181,7 +181,7 @@ MQTT/TLS & 0.084587 & 5128192 & 2.7884 \\
 \draw[line] (b2) -- (b1);
 \draw[line] (b2) -- (b3);
 \end{tikzpicture}
-\caption{本文技术路线}
+\caption{本文研究流程：威胁建模、协议设计、实现联调、攻击验证与结果归纳}
 \label{fig:c1-tech-route}
 \end{figure}
 
@@ -195,7 +195,7 @@ MQTT/TLS & 0.084587 & 5128192 & 2.7884 \\
   \item 构建侧写与 MITM 对照实验，验证外观层在类别保护与抗篡改上的作用。
 \end{itemize}
 
-本文创新点主要体现在三个方面：一是将密码学安全与外观层对抗进行组合设计；二是给出组合数独外观编码的可逆数学表达与复杂度分析；三是建立覆盖性能、外观与攻击验证的一体化实证框架。与仅做概念论证的方案不同，本文将主要结论建立在原型系统、多组对照实验与统一统计规则之上，形成“理论--原型--实验”的完整论证链路。
+本文创新点主要体现在三个方面：一是将密码学安全与外观层对抗进行组合设计；二是给出组合数独外观编码的可逆数学表达与复杂度分析；三是建立覆盖性能、外观与攻击验证的一体化实证框架。上述结论建立在原型系统、多组对照实验与统一统计规则之上，形成可复核的“理论--原型--实验”链路。
 
 \section{论文结构安排}
 全文共五章，结构如下：

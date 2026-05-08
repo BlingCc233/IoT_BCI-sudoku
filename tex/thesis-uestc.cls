@@ -663,17 +663,17 @@
     \cline{2-2}
     \strut & \strut \zh@coverTitleLineB &\\
     \cline{2-2}
-    \strut \coverlabel{学科专业} & \strut \zh@themajor &\\
+    \strut \coverlabelpair{学}{院} & \strut \zh@coverSchoolLineA &\\
+    \cline{2-2}
+    \strut & \strut \zh@coverSchoolLineB &\\
+    \cline{2-2}
+    \strut \coverlabelpair{专}{业} & \strut \zh@themajor &\\
     \cline{2-2}
     \strut \coverlabelpair{学}{号} & \strut \thestudentnumber & \\
     \cline{2-2}
     \strut \coverlabel{作者姓名} & \strut \zh@theauthor &\\
     \cline{2-2}
-    \strut \coverlabel{指导老师} & \strut \zh@theadvisor &\\
-    \cline{2-2}
-    \strut \coverlabelpair{学}{院} & \strut \zh@coverSchoolLineA &\\
-    \cline{2-2}
-    \strut & \strut \zh@coverSchoolLineB &\\
+    \strut \coverlabel{指导教师} & \strut \zh@theadvisor &\\
     \cline{2-2}
   \end{tabular}
   }

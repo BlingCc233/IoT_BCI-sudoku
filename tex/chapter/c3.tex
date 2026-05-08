@@ -30,7 +30,7 @@
 \draw[line, dashed] (s1) -- (a2);
 \draw[line, dashed] (s2) -- (a3);
 \end{tikzpicture}
-\caption{协议分层与数据通路}
+\caption{组合数独协议在应用层与 TCP 之间的分层通路：握手、AEAD 记录与外观层协同}
 \label{fig:c3-stack}
 \end{figure}
 
@@ -69,7 +69,7 @@
 
 \node at (3.6,-4.8) {\scriptsize 双方切换到前向安全会话密钥};
 \end{tikzpicture}
-\caption{三次握手时序}
+\caption{认证握手三步时序：ClientHello、ServerHello 与 ClientFinish}
 \label{fig:c3-handshake-seq}
 \end{figure}
 
@@ -79,7 +79,7 @@
 \begin{table}[H]
 \centering
 \small
-\caption{握手消息字段}
+\caption{握手消息字段摘要：证书认证、协商位与新鲜性信息}
 \label{tab:c3-handshake-fields}
 \begin{tabular}{p{2.5cm}p{4.2cm}p{5.3cm}}
 \toprule
@@ -92,7 +92,7 @@ ClientFinish & 双方 Hello 摘要与确认 MAC & 证明客户端持有共享密
 \end{tabular}
 \end{table}
 
-其中 \texttt{flags} 的低位用于协商会话 AEAD 算法；\texttt{bit2} 表示下行是否启用 pure 模式。本文实验设置固定为 pure 路径，避免模式切换对结论造成混淆。
+其中 \texttt{flags} 的低位用于协商会话 AEAD 算法；\texttt{bit2} 表示下行是否启用纯模式。本文实验设置固定为纯模式路径，避免模式切换对结论造成混淆。
 
 \subsection{身份认证与 transcript 绑定}
 握手认证依赖 Ed25519 证书链与消息签名。服务端在验证证书有效性、签名正确性及时间窗口后，才提交重放缓存 token。客户端验证 \texttt{echo\_nonce\_c} 与 \texttt{client\_hello\_hash}，确保 ServerHello 与当前会话上下文一致。
@@ -181,7 +181,7 @@ B_{\mathrm{fb}} = B_{\mathrm{rec}} \parallel B_{\mathrm{live}},
 \draw[line] (b) -- (c2);
 \draw[line] (c2) -- (d1);
 \end{tikzpicture}
-\caption{可疑流量回落机制状态流程}
+\caption{可疑流量命中后的 silent/fallback 回落与诱饵转发流程}
 \label{fig:c3-fallback-flow}
 \end{figure}
 
@@ -191,7 +191,7 @@ B_{\mathrm{fb}} = B_{\mathrm{rec}} \parallel B_{\mathrm{live}},
 \begin{table}[H]
 \centering
 \small
-\caption{异常处置能力对照（本文实现范围）}
+\caption{握手异常处置对照：组合数独保留已读字节回落接口}
 \label{tab:c3-fallback-compare}
 \begin{tabular}{p{2.3cm}p{4.9cm}p{4.6cm}}
 \toprule
@@ -224,10 +224,10 @@ CoAP/DTLS & 应答失败、超时与重传控制 & 否 \\
 外观层先枚举 4$\times$4 数独解空间，再基于会话种子重排并抽取 256 个网格与字节值对应。关于“4$\times$4 解空间为 288”的来源，OEIS 的 A109252 与 A107739 两个序列在对应项上给出一致结果，即 4$\times$4 数独完备解空间规模为 288\cite{oeisA109252,oeisA107739}。同时，A109252 还给出在 4$\times$4 网格上取 4 个提示且保持唯一解时的题面数量为 25728，这说明在“小规模唯一解题面”约束下仍存在较大的组合空间，可用于支持映射重排并提升攻击者仅凭题面模式实施稳定侧写的难度\cite{oeisA109252}。每个字节维护多个候选提示组；构表阶段执行跨字节解码键冲突检测，若冲突则拒绝构表。该步骤保证解码映射单值性。
 
 \subsection{编码与解码}
-编码阶段对每个字节输出 4 个提示字节，并在多个检查点按概率插入填充字节。解码阶段仅提取提示字节，按 4 个一组拼接解码键并查表还原。由于 pure 模式下最外层始终是提示字节流，协议外观可控且解码路径稳定。
+编码阶段对每个字节输出 4 个提示字节，并在多个检查点按概率插入填充字节。解码阶段仅提取提示字节，按 4 个一组拼接解码键并查表还原。由于纯模式下最外层始终是提示字节流，协议外观可控且解码路径稳定。
 
-\subsection{pure 路径图解与可逆性验证}
-图~\ref{fig:c3-pure-pipeline} 给出 pure 路径从发送到接收的完整闭环。该闭环与编码解码一致性验证实验相对应：发送端执行映射与填充，接收端执行筛选与还原，并以字节级一致性判定可逆性。
+\subsection{纯模式路径图解与可逆性验证}
+图~\ref{fig:c3-full-pipeline} 给出纯模式路径从发送到接收的完整闭环。该闭环与编码解码一致性验证实验相对应：发送端执行映射与填充，接收端执行筛选与还原，并以字节级一致性判定可逆性。
 
 \begin{figure}[htbp]
 \centering
@@ -261,15 +261,15 @@ CoAP/DTLS & 应答失败、超时与重传控制 & 否 \\
 \draw[line] (q1) -- (q0);
 \draw[line, dashed] (q2) -- (ev);
 \end{tikzpicture}
-\caption{纯组合数独编解码闭环与可逆性验证对应关系}
-\label{fig:c3-pure-pipeline}
+\caption{纯模式编解码闭环与可逆性验证：映射、填充、查表恢复}
+\label{fig:c3-full-pipeline}
 \end{figure}
 
 \begin{table}[H]
 \centering
 \small
-\caption{pure 路径可逆性验证方法}
-\label{tab:c3-pure-verify-map}
+\caption{纯模式路径可逆性验证：冲突为零且往返成功率 100\%}
+\label{tab:c3-full-verify-map}
 \begin{tabular}{p{2.8cm}p{4.0cm}p{3.9cm}p{2.2cm}}
 \toprule
 阶段 & 功能环节 & 验证操作 & 判定条件 \\
@@ -310,7 +310,7 @@ CoAP/DTLS & 应答失败、超时与重传控制 & 否 \\
 \begin{table}[H]
 \centering
 \small
-\caption{布局模式与字节表特性（性质验证）}
+\caption{ASCII/Entropy/Custom 模式的提示掩码、填充池与汉明重特点}
 \label{tab:c3-layout-char}
 {\setlength{\tabcolsep}{3pt}
 \begin{tabular}{p{2.6cm}p{2.0cm}p{1.4cm}p{1.8cm}p{1.4cm}p{1.8cm}}
@@ -329,7 +329,7 @@ Custom-B (\texttt{vppxppvx}) & 0x11 / 0x11 & 64 & 44 & 0 & 5.36 \\
 从可计算复杂性视角看，数独映射可视为约束满足/可满足性编码问题\cite{lynce2006satgrid}，这为后续构表冲突检测与可逆性证明提供了理论支点。
 
 \subsection{6bit分包组合数独编码路径}
-除 pure 路径外，本文还设计了 6bit分包组合数独。其基本过程是把明文字节流按 6-bit 分组，再映射为符合组合数独字节布局的外观字节。对连续 3 字节输入 $(b_1,b_2,b_3)$，可得到 4 个 6-bit 分组：
+除纯模式路径外，本文还设计了 6bit分包组合数独。其基本过程是把明文字节流按 6-bit 分组，再映射为符合组合数独字节布局的外观字节。对连续 3 字节输入 $(b_1,b_2,b_3)$，可得到 4 个 6-bit 分组：
 \[
 \begin{aligned}
 g_1 &= (b_1\!\gg\!2),\\
@@ -338,10 +338,10 @@ g_3 &= ((b_2\&0x0F)\!\ll\!2)\,|\, (b_3\!\gg\!6),\\
 g_4 &= (b_3\&0x3F).
 \end{aligned}
 \]
-该路径保留了组合数独字节外观风格（可打印布局与自定义模板仍可生效），但不再执行“每原始字节 $\rightarrow$ 4 提示字节 $\rightarrow$ 数独网格”的离散映射过程，因此混淆强度低于 pure 路径。其工程取舍为：
+该路径保留了组合数独字节外观风格（可打印布局与自定义模板仍可生效），但不再执行“每原始字节 $\rightarrow$ 4 提示字节 $\rightarrow$ 数独网格”的离散映射过程，因此混淆强度低于纯模式路径。其工程取舍为：
 \begin{itemize}
-  \item 优点：线长与 RTT 通常优于 pure，带宽利用率更高；
-  \item 缺点：外观随机性下降，对高级侧写模型的抑制能力弱于 pure；
+  \item 优点：线长与 RTT 通常优于纯模式，带宽利用率更高；
+  \item 缺点：外观随机性下降，对高级侧写模型的抑制能力弱于纯模式；
   \item 适用：链路带宽更紧、但仍希望保持组合数独外观风格的场景。
 \end{itemize}
 
@@ -376,14 +376,14 @@ g_4 &= (b_3\&0x3F).
 \draw[line] (g4) -- (o);
 \end{tikzpicture}
 \caption{6bit分包组合数独的 3B$\rightarrow$4 组分解示意}
-\label{fig:c3-packed-bitflow}
+\label{fig:c3-segment-bitflow}
 \end{figure}
 
 \begin{table}[H]
 \centering
 \small
-\caption{pure 与 packed 机理对照}
-\label{tab:c3-pure-packed-mechanism}
+\caption{纯模式与分包模式的编码颗粒、混淆强度与带宽开销对照}
+\label{tab:c3-mode-mechanism}
 \begin{tabular}{p{2.3cm}p{4.7cm}p{4.7cm}}
 \toprule
 维度 & 纯组合数独 & 6bit分包组合数独 \\
@@ -411,11 +411,11 @@ g_4 &= (b_3\&0x3F).
 \end{itemize}
 
 \subsection{核心算法伪代码}
-下文给出握手状态机、pure 编码与异常回落三类机制的形式化伪代码。
+下文给出握手状态机、纯模式编码与异常回落三类机制的形式化伪代码。
 
 \begin{algorithm}[H]
 \small
-\caption{服务端握手校验与会话切换}
+\caption{服务端握手校验：探测、认证、重放检查后切换会话}
 \label{alg:c3-server-handshake}
 \KwIn{原始连接 $conn$，服务端配置 $opts$}
 \KwOut{会话连接或可疑错误}
@@ -440,8 +440,8 @@ g_4 &= (b_3\&0x3F).
 
 \begin{algorithm}[H]
 \small
-\caption{纯组合数独写路径编码}
-\label{alg:c3-pure-write}
+\caption{纯模式写路径：按阈值插入填充并输出 4 个提示字节}
+\label{alg:c3-full-write}
 \KwIn{明文字节序列 $P$，编码表 $T$，填充阈值 $\tau$}
 \KwOut{线上字节流 $W$}
 $W \leftarrow \emptyset$\;
@@ -465,7 +465,7 @@ $W \leftarrow \emptyset$\;
 
 \begin{algorithm}[H]
 \small
-\caption{可疑流量回落策略}
+\caption{可疑流量回落策略：silent 丢弃或转发至诱饵连接}
 \label{alg:c3-fallback}
 \KwIn{连接包装 $wrapper$，原始连接 $raw$，策略 $action$，诱饵地址 $addr$}
 \KwOut{异常路径处置结果}
