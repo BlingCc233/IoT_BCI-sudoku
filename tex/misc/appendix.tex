@@ -2,6 +2,12 @@
 
 \chapter{复现说明与证据索引}
 
+\section{代码仓库}
+本文原型系统、实验脚本与证据文件存放于 GitHub 仓库：
+\begin{center}
+\url{https://github.com/BlingCc233/IoT_BCI-sudoku}
+\end{center}
+
 \section{结论到证据文件映射}
 为保证可复核性，正文关键结论与证据文件映射见表~\ref{tab:app-evidence-index}。
 
@@ -14,7 +20,7 @@
 \toprule
 索引 & 结论类型 & 证据文件 & 关键字段 \\
 \midrule
-E1 & 本地基线性能 &
+E1 & 本地对照性能 &
 \path{evidence_steps/05_baseline_comparison/out/summary.json} &
 \path{evidence_rows}, \path{evidence_guard_runs} \\
 \midrule
@@ -69,14 +75,14 @@ step06 的协议侧写采用最近质心留一验证。核心过程为：
 \section{跨国实验部署约束}
 跨国实验采用本机客户端与加拿大区域公网云主机。为保护运维资产安全，正文与附录均不公开服务端公网 IP。受公网策略影响，UDP 直连不可用：
 \begin{itemize}
-  \item 组合数独协议 / Pure-AEAD / MQTT-TLS：TCP 直连；
+  \item 组合数独协议 / 纯 AEAD / MQTT-TLS：TCP 直连；
   \item DTLS / CoAP：UoT（UDP-over-TCP）中继。
 \end{itemize}
 
 该约束已写入 \path{evidence_steps/07_cross_region_benchmark/out/summary.json:notes.udp_transport}。
 
 \section{复现实验命令}
-\subsection{本地基线（step05）}
+\subsection{本地对照（step05）}
 \begin{verbatim}
 cd evidence_steps/05_baseline_comparison
 python3 run.py
@@ -97,14 +103,6 @@ python3 evidence_steps/07_cross_region_benchmark/run.py \
   --ssh-key "$KEY" \
   --runs 3 --messages 20 --size 128 --timeout 300
 \end{verbatim}
-
-\section{复核清单}
-\begin{itemize}
-  \item 检查 step05/06/07 的 \path{summary.json} 是否存在且时间戳一致；
-  \item 检查 step07 的 \path{guard} 字段是否满足组合数独协议条件；
-  \item 检查 step06 的 \path{protocol_fingerprint.accuracy}、\path{bci_sidechannel} 与 \path{mitm_compare}；
-  \item 对照正文图表数值与附录字段映射，确认无手工改写。
-\end{itemize}
 
 \section{附录说明}
 \begin{itemize}

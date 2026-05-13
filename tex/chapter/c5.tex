@@ -10,7 +10,7 @@
 主动攻击实验显示，重放、篡改与资源探测均进入拒绝路径；TLS MITM 对照中类别恢复率为 1.0，表明链路级加密与业务语义保密之间仍存在可利用风险（见表~\ref{tab:c4-security-evidence}）。组合数独协议将签名认证、摘要绑定、确认码与重放缓存纳入同一状态机，使握手阶段的身份认证、上下文绑定与新鲜性检查能够形成完整闭环\cite{rfc8446,rfc9147,wilkens2021passivetls}。
 
 \subsection{RQ3：外观编码是否具备可调且可逆特性}
-协议识别结果 96.67\% 说明常规加密流量仍可被特征学习；扩展对照中，MQTT/TLS、CoAP/UDP 与 Pure-AEAD 的协议侧写召回率均为 1.0000。BCI 类别侧写中，MQTT/TLS、CoAP/UDP、Pure-AEAD 与组合数独协议无填充模式恢复率均为 1.0000，纯组合数独填充模式为 0.1667，6bit分包组合数独（prefer\_entropy）填充模式为 0.2500（见图~\ref{fig:c4-proto-recall-extended}、图~\ref{fig:c4-sidechannel-dpi}）。结合第 3 章可逆构表与冲突拒绝机制，表明组合数独外观层能够在“可逆解码”前提下实现可调混淆\cite{alwhbi2024encrypted,hou2024encmalware}。
+协议识别结果 96.67\% 说明常规加密流量仍可被特征学习；扩展对照中，MQTT/TLS、CoAP/UDP 与纯 AEAD 的协议侧写召回率均为 1.0000。BCI 类别侧写中，MQTT/TLS、CoAP/UDP、纯 AEAD 与组合数独协议无填充模式恢复率均为 1.0000，纯组合数独填充模式为 0.1667，6bit分包组合数独（prefer\_entropy）填充模式为 0.2500（见图~\ref{fig:c4-proto-recall-extended}、图~\ref{fig:c4-sidechannel-dpi}）。结合第 3 章可逆构表与冲突拒绝机制，表明组合数独外观层能够在“可逆解码”前提下实现可调混淆\cite{alwhbi2024encrypted,hou2024encmalware}。
 
 \subsection{RQ4：结论是否可复核}
 本文各项结果均在统一实验设置、统一指标定义和多轮重复统计下获得；本地与跨国双环境得到一致趋势：组合数独协议相较 DTLS 与 MQTT/TLS 在内存占用上保持优势，RTT 保持同量级。因此，RQ4 成立，结论具备较好的可复核性与可重复性。
@@ -30,13 +30,13 @@
 
 据此，组合数独协议可界定为 BCI-IoT 场景下具备工程可部署性的协议方案：在受限部署条件下可提供更可控的资源行为与更强的外观调控能力。从方法论看，本文把安全目标拆分为可验证属性，并为握手认证、会话保护和外观抗侧写分别支付状态、计算与线长成本；这种“为特定安全属性支付特定成本”的设计思路，可为资源受限物联网安全协议的后续设计提供参考。
 
-\begin{figure}[htbp]
+\begin{figure}[!b]
 \centering
 \small
 \begin{tikzpicture}
 \begin{axis}[
   width=0.88\linewidth,
-  height=6.0cm,
+  height=4.45cm,
   xmin=0, xmax=10,
   ymin=0, ymax=10,
   xlabel={带宽效率（高更优）},
@@ -52,7 +52,7 @@
 
 \node[anchor=west] at (axis cs:2.0,9.0) {\scriptsize 纯组合数独};
 \node[anchor=west] at (axis cs:6.0,6.6) {\scriptsize 6bit分包组合数独};
-\node[anchor=west] at (axis cs:9.0,2.0) {\scriptsize Pure-AEAD};
+\node[anchor=west] at (axis cs:9.0,2.0) {\scriptsize 纯 AEAD};
 \node[anchor=west] at (axis cs:6.2,3.0) {\scriptsize DTLS};
 \node[anchor=west] at (axis cs:8.0,2.6) {\scriptsize CoAP};
 \node[anchor=west] at (axis cs:7.0,3.2) {\scriptsize MQTT/TLS};
@@ -62,16 +62,16 @@
 \label{fig:c5-tradeoff-map}
 \end{figure}
 
-\section{与基线方案的客观对比}
-为保持学术严谨，本文明确列出组合数独协议的不足与边界。
+\section{与对照方案的客观对比}
+为保持学术严谨，本文明确列出组合数独协议的不足与限制。
 \begin{itemize}
-  \item 相比 Pure-AEAD：纯组合数独带宽开销更高，窄带场景成本更大；
+  \item 相比纯 AEAD：纯组合数独带宽开销更高，窄带场景成本更大；
   \item 相比 MQTT/TLS：缺乏成熟 broker 生态与现成平台适配层；
   \item 相比 CoAP/DTLS：对“必须原生 UDP”的业务语义适配较弱；
   \item 相比标准 TLS/DTLS：标准化程度、第三方互操作证据仍不足。
 \end{itemize}
 
-同时，基线协议也存在对应边界：CoAP/DTLS 在公网受限场景下可达性受制于 UDP 路径\cite{rfc7252,rfc9147,rfc8085,rfc4787,nedergaard2023coapsecure}；MQTT/TLS 与传统加密隧道仍面临流量侧写识别风险\cite{mqtt311,alwhbi2024encrypted,hou2024encmalware,zheng2023mqtttamarin}；Pure-AEAD 路线若无额外握手状态机，重放新鲜性保障较弱\cite{rfc5116}。
+同时，对照方案也存在相应限制：CoAP/DTLS 在公网受限场景下可达性受制于 UDP 路径\cite{rfc7252,rfc9147,rfc8085,rfc4787,nedergaard2023coapsecure}；MQTT/TLS 与传统加密隧道仍面临流量侧写识别风险\cite{mqtt311,alwhbi2024encrypted,hou2024encmalware,zheng2023mqtttamarin}；纯 AEAD 路线若无额外握手状态机，重放新鲜性保障较弱\cite{rfc5116}。
 
 \section{应用场景与工程建议}
 基于实证结果，组合数独协议更适用于以下场景：
@@ -93,4 +93,4 @@
   \item \textbf{与行业协议融合}：探索与 MQTT 语义层或 CoAP 资源模型的协同封装路径。
 \end{itemize}
 
-综上，本文完成了从理论、实现到证据的闭环验证，并给出了组合数独协议在真实约束下的优势、成本与边界，为后续扩展和工程落地提供了可复核基础。
+综上，本文完成了从理论、实现到证据的闭环验证，并给出了组合数独协议在真实约束下的优势、成本与限制，为后续扩展和工程落地提供了可复核基础。
